@@ -1,5 +1,17 @@
+import { Metadata } from "next"; // 1. Import Metadata
 import Link from "next/link";
 import { Home } from "lucide-react";
+
+// 2. Add SEO Metadata
+export const metadata: Metadata = {
+  title: "404 - Page Not Found | DeepShark AI",
+  description: "The page you are looking for does not exist.",
+  // ⛔️ CRITICAL: Explicitly tell Google NOT to index this page
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default function NotFound() {
   return (

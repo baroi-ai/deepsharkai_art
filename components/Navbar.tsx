@@ -6,10 +6,12 @@ import { Menu, X } from "lucide-react";
 import Link from "next/link";
 import { AuthModal } from "@/components/AuthModal";
 import { useSession } from "next-auth/react";
+import { usePathname } from "next/navigation"; // ✅ Added for path detection
 
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const pathname = usePathname(); // ✅ Get current route
 
   // ✅ Real auth state
   const { data: session } = useSession();
@@ -24,11 +26,35 @@ const Navbar = () => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [scrolled]);
 
+  // ✅ New Handler: Forces scroll even if URL is already #features
+  const handleScroll = (
+    e: React.MouseEvent<HTMLAnchorElement, MouseEvent>,
+    href: string,
+  ) => {
+    // 1. Check if the link is a hash link (e.g., /#features)
+    if (href.includes("#")) {
+      const targetId = href.split("#")[1];
+      const elem = document.getElementById(targetId);
+
+      // 2. If the element exists on the current page, scroll to it manually
+      if (elem) {
+        e.preventDefault(); // Stop default browser behavior (which does nothing if hash matches)
+        elem.scrollIntoView({ behavior: "smooth" });
+
+        // Optional: Update URL hash without reloading
+        window.history.pushState(null, "", `/#${targetId}`);
+
+        // Close mobile menu if open
+        setMobileMenuOpen(false);
+      }
+    }
+  };
+
   const navItems = [
     { name: "Features", href: "/#features" },
-    { name: "AI Tools", href: "/dashboard/tools" },
-    { name: "AI Models", href: "/dashboard/models" },
-    { name: "Pricing", href: "/dashboard/billing" },
+    { name: "AI Tools", href: "/#tools" },
+    { name: "AI Models", href: "/#models" },
+    { name: "Pricing", href: "/pricing" },
     { name: "Contact", href: "/contact" },
   ];
 
@@ -41,17 +67,14 @@ const Navbar = () => {
       }`}
     >
       <div className="container mx-auto px-4 md:px-6">
-        {/* 1️⃣ Added 'relative' here so the absolute nav positions itself 
-            relative to this box, not the whole page.
-        */}
         <div className="flex items-center justify-between relative">
-          {/* Left Side: Logo (Added relative z-10 to keep it clickable) */}
+          {/* Left Side: Logo */}
           <Link
             href="/"
             className="flex items-center gap-2 flex-shrink-0 relative z-10"
           >
             <img
-              src="/logo.png"
+              src="/logo.webp"
               alt="DeepShark AI Logo"
               className="h-10 lg:h-12 w-auto object-contain drop-shadow-[0_0_8px_rgba(20,184,166,0.5)]"
             />
@@ -60,16 +83,14 @@ const Navbar = () => {
             </span>
           </Link>
 
-          {/* 2️⃣ CENTER NAV: Perfectly Centered 
-             - Removed: flex-grow, justify-center
-             - Added: absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
-             This forces it to the exact pixel center of the parent div.
-          */}
+          {/* Center Nav */}
           <nav className="hidden md:flex items-center gap-6 absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-max">
             {navItems.map((item) => (
               <Link
                 key={item.name}
                 href={item.href}
+                // ✅ Added onClick handler here
+                onClick={(e) => handleScroll(e, item.href)}
                 className="text-gray-300 hover:text-teal-400 transition-colors link-underline font-medium text-sm lg:text-base"
               >
                 {item.name}
@@ -77,7 +98,7 @@ const Navbar = () => {
             ))}
           </nav>
 
-          {/* Right Side: Actions (Added relative z-10 to keep it clickable) */}
+          {/* Right Side: Actions */}
           <div className="hidden md:flex items-center gap-4 flex-shrink-0 relative z-10">
             {isAuthenticated ? (
               <Button
@@ -100,7 +121,7 @@ const Navbar = () => {
             )}
           </div>
 
-          {/* Mobile Menu Button (Right aligned automatically via justify-between) */}
+          {/* Mobile Menu Button */}
           <button
             className="md:hidden text-gray-200 hover:text-teal-400 p-2 relative z-10"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -111,7 +132,7 @@ const Navbar = () => {
         </div>
       </div>
 
-      {/* Mobile Menu (Unchanged) */}
+      {/* Mobile Menu */}
       {mobileMenuOpen && (
         <div className="md:hidden glass-panel mt-2 pb-4 px-4 shadow-md animate-fadeIn bg-slate-900 border-b border-white/10">
           <nav className="flex flex-col space-y-4 pt-4">
@@ -119,8 +140,9 @@ const Navbar = () => {
               <Link
                 key={item.name}
                 href={item.href}
+                // ✅ Added onClick handler here too
+                onClick={(e) => handleScroll(e, item.href)}
                 className="text-gray-300 hover:text-teal-400 px-4 py-2 rounded-md hover:bg-slate-800 transition-colors"
-                onClick={() => setMobileMenuOpen(false)}
               >
                 {item.name}
               </Link>

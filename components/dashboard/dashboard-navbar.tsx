@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import Image from "next/image"; // ✅ 1. Import Next.js Image
 import {
   Menu,
   Coins,
@@ -35,7 +36,6 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
   const { data: session } = useSession();
   const user = session?.user;
 
-  // Default to 0 if not logged in
   // @ts-ignore
   const userCoins = user?.credits || 0;
 
@@ -49,14 +49,24 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
             size="icon"
             className="md:hidden text-gray-400 hover:text-white hover:bg-white/10"
             onClick={toggleSidebar}
+            aria-label="Toggle Sidebar Menu" // ✅ Fix: Accessibility Name
           >
             <Menu className="h-6 w-6" />
           </Button>
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <img
-              src="/logo.png"
-              alt="Logo"
-              className="h-8 w-auto md:h-10 drop-shadow-[0_0_5px_rgba(20,184,166,0.5)]"
+
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-2"
+            aria-label="Go to Dashboard Home" // ✅ Fix: Link Description
+          >
+            {/* ✅ Fix: Optimized Logo with Priority (LCP) */}
+            <Image
+              src="/logo.webp"
+              alt="DeepShark AI Logo"
+              width={40}
+              height={40}
+              priority={true} // Critical for top-of-page elements
+              className="h-8 w-auto md:h-10 drop-shadow-[0_0_5px_rgba(20,184,166,0.5)] object-contain"
             />
             <span className="hidden text-teal-500 sm:inline-block text-lg md:text-xl font-bold drop-shadow-[0_0_5px_rgba(20,184,166,0.5)]">
               DeepShark AI
@@ -66,24 +76,29 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
 
         {/* Right side */}
         <div className="flex items-center gap-3 md:gap-4">
-          <Link href="/download" className="hidden md:block">
+          <Link
+            href="/download"
+            className="hidden md:block"
+            aria-label="Download Desktop App"
+          >
             <Button
               variant="ghost"
               size="icon"
               className="text-gray-400 hover:text-white hover:bg-white/10"
+              aria-label="Download App" // ✅ Fix: Accessible Name
             >
               <Download className="h-5 w-5" />
             </Button>
           </Link>
 
-          {/* ✅ CREDITS BADGE (Always Visible) */}
+          {/* Credits Badge */}
           {user ? (
-            // If Logged In: Go to Billing
             <Button
               variant="outline"
               size="sm"
               className="group flex items-center gap-1.5 border-teal-500/30 bg-teal-900/10 hover:bg-teal-900/20 text-teal-100 rounded-full h-8"
               asChild
+              aria-label={`View Credits: ${userCoins} available`} // ✅ Fix
             >
               <Link href="/dashboard/billing">
                 <Coins className="h-4 w-4 text-teal-400" />
@@ -92,13 +107,13 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
               </Link>
             </Button>
           ) : (
-            // If Logged Out: Show 0 and Open Login Modal on click
             <AuthModal
               trigger={
                 <Button
                   variant="outline"
                   size="sm"
                   className="group flex items-center gap-1.5 border-teal-500/30 bg-teal-900/10 hover:bg-teal-900/20 text-teal-100 rounded-full h-8 cursor-pointer"
+                  aria-label="Purchase Credits" // ✅ Fix
                 >
                   <Coins className="h-4 w-4 text-teal-400" />
                   <span className="text-sm font-medium">0</span>
@@ -108,16 +123,20 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
             />
           )}
 
-          {/* User Menu vs Login Button */}
+          {/* User Menu */}
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   className="relative h-9 w-9 rounded-full p-0 ring-2 ring-transparent hover:ring-teal-500/50 transition-all"
+                  aria-label="Open User Menu" // ✅ Fix: Accessible Name
                 >
                   <Avatar className="h-full w-full border border-white/10">
-                    <AvatarImage src={user.image || ""} />
+                    <AvatarImage
+                      src={user.image || ""}
+                      alt={user.name || "User Avatar"}
+                    />
                     <AvatarFallback className="bg-slate-800 text-teal-400 font-bold">
                       {user.name?.charAt(0).toUpperCase() || "U"}
                     </AvatarFallback>
@@ -162,7 +181,7 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
                 </DropdownMenuItem>
 
                 <DropdownMenuItem asChild>
-                  <Link href="/support" className="cursor-pointer">
+                  <Link href="/contact" className="cursor-pointer">
                     <MailCheck className="mr-2 h-4 w-4" />
                     <span>Support</span>
                   </Link>
@@ -180,13 +199,13 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            // Login Button
             <AuthModal
               defaultTab="login"
               trigger={
                 <Button
                   variant="ghost"
                   className="text-gray-300 hover:text-teal-400 hover:bg-white/5"
+                  aria-label="Login to Account" // ✅ Fix
                 >
                   <LogIn className="h-5 w-5 mr-2" /> Login
                 </Button>

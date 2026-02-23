@@ -11,12 +11,12 @@ import {
 } from "lucide-react";
 import { db } from "../app/db";
 import { aiTools } from "../app/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 
 // ✅ 1. CACHING
 export const revalidate = 3600;
 
-// ✅ 2. ICON MAPPER (Maps DB strings to Components)
+// ✅ 2. ICON MAPPER
 const ICON_MAP: Record<string, any> = {
   ImagePlus: ImagePlus,
   Video: Video,
@@ -31,17 +31,10 @@ const AITools = async () => {
     .select()
     .from(aiTools)
     .orderBy(desc(aiTools.id))
-    .limit(9); // Fetch max 9 items
-
-  // Consistent Red Badge Style
-  const badgeClass =
-    "bg-red-600/90 text-white shadow-md border border-red-500/20";
+    .limit(11);
 
   return (
-    <section
-      id="ai-tools"
-      className="py-24 relative overflow-hidden bg-slate-950"
-    >
+    <section id="tools" className="py-24 relative overflow-hidden bg-slate-950">
       <div className="absolute inset-0 hero-gradient z-10"></div>
       <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-slate-950 via-slate-950/50 to-transparent z-20 pointer-events-none"></div>
       <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-slate-950 to-transparent z-20"></div>
@@ -66,21 +59,35 @@ const AITools = async () => {
             const isVideo =
               imageUrl.endsWith(".mp4") || imageUrl.endsWith(".webm");
 
-            // ✅ 4. RESPONSIVE LOGIC
-            // Hide the 8th and 9th items (index 7 and 8) on Desktop (lg screen)
-            // Mobile will see 9 items. Desktop will see 7 items.
-            const responsiveClass = index >= 7 ? "lg:hidden" : "";
+            // ✅ 4. PYRAMID LAYOUT LOGIC (7 - 3 - 1)
+            let positioningClass = "";
+            if (index === 7) {
+              positioningClass = "lg:col-start-3";
+            } else if (index === 10) {
+              positioningClass = "lg:col-start-4";
+            }
+
+            // ✅ 5. MOBILE HIDDEN LOGIC
+            // If the item is the 10th or 11th (index 9 or 10), hide it on mobile, show on md and up.
+            const mobileHiddenClass = index >= 9 ? "hidden md:block" : "";
+
+            // ✅ 6. BADGE LOGIC
+            const isFree = tool.badge?.toLowerCase().trim() === "free";
+            const badgeClass = isFree
+              ? "bg-emerald-500 text-black shadow-[0_0_15px_rgba(16,185,129,0.7)] ring-1 ring-emerald-300 animate-pulse border-none"
+              : "bg-red-600/90 text-white shadow-md border border-red-500/20";
 
             return (
               <Link
                 key={tool.id}
                 href={tool.link || "#"}
-                className={`group relative aspect-square rounded-xl overflow-hidden cursor-pointer border border-white/5 hover:border-teal-500/50 transition-all duration-300 shadow-lg hover:scale-105 ${responsiveClass}`}
+                // Added mobileHiddenClass here 👇
+                className={`group relative aspect-square rounded-xl overflow-hidden cursor-pointer border border-white/5 hover:border-teal-500/50 transition-all duration-300 shadow-lg hover:scale-105 ${positioningClass} ${mobileHiddenClass}`}
               >
                 {/* Badge */}
                 {tool.badge && (
                   <div
-                    className={`absolute top-2 right-2 z-20 text-[10px] font-bold px-2 py-0.5 rounded-sm ${badgeClass}`}
+                    className={`absolute top-2 right-2 z-20 text-[10px] font-extrabold px-2 py-0.5 rounded-sm transition-all duration-300 ${badgeClass}`}
                   >
                     {tool.badge}
                   </div>
@@ -110,9 +117,6 @@ const AITools = async () => {
                 {/* Gradient Overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-80 group-hover:opacity-90 transition-opacity" />
 
-                {/* Icon Overlay */}
-                <div className="absolute top-2 left-2 z-10 opacity-70 group-hover:opacity-100 transition-opacity"></div>
-
                 {/* Content */}
                 <div className="absolute bottom-0 left-0 w-full p-3 flex flex-col justify-end">
                   <h3 className="text-xs md:text-sm font-bold text-white leading-tight mb-0.5 group-hover:text-teal-400 transition-colors">
@@ -128,7 +132,7 @@ const AITools = async () => {
         </div>
 
         <div className="text-center mt-12">
-          <Link href="/dashboard/models">
+          <Link href="/dashboard/tools">
             <Button className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-black">
               Browse All Tools <ArrowRight className="ml-2 h-4 w-4" />
             </Button>

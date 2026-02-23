@@ -4,6 +4,15 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 import { Toaster } from "sonner";
 import { AuthModal } from "@/components/AuthModal"; // ✅ Import AuthModal
+import { Viewport } from "next";
+
+export const viewport: Viewport = {
+  themeColor: "#020617", // slate-950
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1, // Crucial: Prevents zooming on mobile inputs
+  userScalable: false,
+};
 
 const inter = Inter({ subsets: ["latin"] });
 

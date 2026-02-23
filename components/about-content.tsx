@@ -9,10 +9,10 @@ import {
   Sparkles,
   Cloud,
   Cpu,
-  Image as ImageIcon,
-  Video,
-  AudioLines,
-  ShoppingBag,
+  Layers,
+  Wand2,
+  Maximize,
+  Eraser,
   Smile,
   DollarSign,
   Zap,
@@ -32,98 +32,106 @@ const AboutContent = () => {
             About DeepShark AI
           </h1>
           <p className="text-lg md:text-xl text-gray-300">
-            Empowering creativity through accessible, powerful, cloud-based AI
-            generation tools. No installs, no limits, just pure creation.
+            The ultimate AI Image Studio. Turn flat images into editable layers,
+            generate stunning art, and upscale to 4K—all in your browser.
           </p>
         </div>
+
         <div className="w-full max-w-4xl mx-auto bg-transparent backdrop-blur-md border border-white/15 rounded-lg p-6 md:p-8 mb-12 shadow-lg">
           <h2 className="text-2xl md:text-3xl font-semibold mb-4 text-center text-teal-400">
             Our Mission
           </h2>
           <p className="text-gray-200 text-center md:text-lg">
-            We believe that the power of artificial intelligence to create
-            stunning digital content should be available to everyone. DeepShark
-            AI was built to break down barriers – eliminating the need for
-            expensive hardware, complex software installations, and restrictive
-            subscriptions. Our mission is to provide an intuitive, powerful, and
-            flexible platform where your imagination is the only limit.
+            We believe standard AI image generators aren't enough—creators need
+            actual control. DeepShark AI was built to break the boundaries of
+            traditional AI art. By introducing our signature{" "}
+            <strong>Image Decomposer</strong> alongside elite generation models,
+            we are putting a professional-grade studio directly in your hands.
+            No expensive hardware, no restrictive monthly subscriptions, just
+            pure, limitless creativity on a fair pay-as-you-go platform.
           </p>
         </div>
+
         <div className="w-full max-w-5xl mx-auto mb-12 md:mb-16">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-8 md:mb-10">
-            What You Can Create
+            What You Can Do
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
             <FeatureCard
-              icon={ImageIcon}
-              title="AI Image Generation"
-              description="Bring your wildest ideas to life with photorealistic or stylized images from text prompts."
+              icon={Layers}
+              title="Image Decomposer"
+              description="Our signature tool. Instantly extract backgrounds, subjects, and foregrounds into movable 3D layers."
             />
             <FeatureCard
-              icon={ImageIcon}
-              title="AI Image Editing"
-              description="Edit existing images with AI-powered tools to enhance, modify, or completely transform visuals."
+              icon={Wand2}
+              title="Elite Generation"
+              description="Create mind-bending art from text using the world's most powerful, state-of-the-art AI models."
             />
             <FeatureCard
-              icon={AudioLines}
-              title="Realistic Voice Cloning"
-              description="Clone voices with remarkable accuracy from short audio samples for various applications."
+              icon={Maximize}
+              title="4K Upscaling"
+              description="Take blurry, low-res images and instantly enhance them to crisp, high-definition 4K quality."
             />
             <FeatureCard
-              icon={Video}
-              title="AI Video Creation"
-              description="Generate short video clips from text or animate still images with incredible motion."
+              icon={Eraser}
+              title="Free Local Tools"
+              description="Enjoy unlimited, free access to our client-side Magic Eraser, Background Remover, and more."
             />
           </div>
         </div>
+
         <div className="w-full max-w-4xl mx-auto mb-12 md:mb-16">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-8 md:mb-10">
             Why Choose DeepShark AI?
           </h2>
           <div className="space-y-6">
             <BenefitItem
-              icon={Cloud}
-              title="Purely Cloud-Based"
-              description="Access powerful AI from any device with an internet connection. No downloads, no installations, no hardware limitations."
+              icon={DollarSign}
+              title="Pay Only For What You Use"
+              description="Say goodbye to $20/month subscriptions you barely use. Our coin system means you only pay for the heavy computing power you actually consume."
             />
             <BenefitItem
-              icon={DollarSign}
-              title="Pay As You Use"
-              description="Our flexible coin system means you only pay for the resources you consume. Perfect for projects big and small, without hefty upfront costs."
+              icon={Cloud}
+              title="100% Cloud-Powered Studio"
+              description="Access massive GPU power from any device. Whether you are on a high-end desktop or a smartphone, your render times are lightning fast."
             />
             <BenefitItem
               icon={Zap}
-              title="Intuitive & Fast"
-              description="We focus on a clean, user-friendly interface so you can start creating in minutes, not hours. Get high-quality results quickly."
+              title="Free Everyday Essentials"
+              description="We run tools like Magic Eraser locally on your browser. Because it doesn't cost us server time, we give it to you completely free, forever."
             />
             <BenefitItem
               icon={Cpu}
-              title="Cutting-Edge AI"
-              description="We integrate state-of-the-art open-source and proprietary AI models, constantly updated to provide the best possible generation quality."
+              title="Access to the Elite Models"
+              description="We constantly update our backend with the newest open-source and proprietary models, so you never fall behind the cutting edge of AI."
             />
           </div>
         </div>
+
         <div className="w-full max-w-4xl mx-auto bg-transparent backdrop-blur-md border border-white/15 rounded-lg p-6 md:p-8 mb-12 shadow-lg">
           <h2 className="text-2xl md:text-3xl font-semibold mb-4 text-center text-teal-400">
             Always Evolving
           </h2>
           <div className="flex flex-col md:flex-row items-center gap-6">
             <div className="flex-shrink-0 grid grid-cols-2 gap-4">
-              <ShoppingBag className="h-10 w-10 text-teal-400 opacity-70" />
+              <Layers className="h-10 w-10 text-teal-400 opacity-70" />
               <Smile className="h-10 w-10 text-teal-400 opacity-70" />
             </div>
             <p className="text-gray-200 md:text-lg text-center md:text-left">
-              DeepShark AI is constantly growing. Our dedicated team is hard at
-              work developing exciting new features. Soon, you'll be able to
-              explore{" "}
-              <span className="font-medium text-teal-400">Virtual Try-On</span>{" "}
-              capabilities, experiment with advanced{" "}
-              <span className="font-medium text-teal-400">Face Swapping</span>{" "}
-              tools, and much more – all delivered through our seamless cloud
-              platform. Stay tuned!
+              DeepShark AI is growing every day. We are constantly experimenting
+              with new ways to give you more control over your canvas. Soon,
+              you'll be able to explore advanced{" "}
+              <span className="font-medium text-teal-400">Face Swapping</span>,
+              seamless{" "}
+              <span className="font-medium text-teal-400">
+                Video Integration
+              </span>
+              , and even more tools to bridge the gap between AI generation and
+              professional graphic design. Stay tuned!
             </p>
           </div>
         </div>
+
         <div className="text-center">
           <p className="text-lg text-gray-300 mb-6">
             Ready to bring your ideas to life?

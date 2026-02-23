@@ -10,21 +10,19 @@ import {
   CreditCard,
   LogOut,
   LogIn,
-  Video,
   ImagePlus,
-  ImageUpscale,
-  AudioLines,
   Dices,
   FolderCheck,
+  Layers,
 } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { AuthModal } from "@/components/AuthModal";
 
 const mainNavItems = [
   { name: "Home", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Image", href: "/dashboard/image-generation", icon: ImageIcon },
-  { name: "Upscaler", href: "/dashboard/image-upscaler", icon: ImageUpscale },
-  { name: "Edit", href: "/dashboard/image-edit", icon: ImagePlus },
+  { name: "Layer", href: "/dashboard/image/decompose", icon: Layers },
+  { name: "Image", href: "/dashboard/image/generator", icon: ImageIcon },
+  { name: "Edit", href: "/dashboard/image/edit", icon: ImagePlus },
   { name: "More", href: "/dashboard/tools", icon: Dices },
 ];
 

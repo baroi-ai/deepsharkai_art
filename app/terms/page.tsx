@@ -21,8 +21,9 @@ export default function TermsPage() {
           <h1 className="text-4xl md:text-5xl font-bold mb-6 text-white text-center">
             Terms and Conditions
           </h1>
+          {/* ✅ UPDATED: Date to match your other pages */}
           <p className="text-center text-gray-400 mb-8">
-            Last Updated: July 12, 2025
+            Last Updated: January 23, 2026
           </p>
 
           <div className="prose prose-invert prose-lg max-w-none space-y-6">
@@ -32,7 +33,7 @@ export default function TermsPage() {
               operated by Subhodeep Baroi, doing business as DeepShark AI ("us",
               "we", or "our").
             </p>
-            {/* ... [Rest of your Terms content remains exactly the same] ... */}
+
             <p>
               Your access to and use of the Service is conditioned upon your
               acceptance of and compliance with these Terms. These Terms apply
@@ -49,16 +50,19 @@ export default function TermsPage() {
               and for any activities or actions under your password.
             </p>
 
-            {/* Truncated for brevity - PASTE YOUR FULL CONTENT HERE */}
+            {/* ... Paste the rest of your Terms text here ... */}
 
-            <h2>10. Contact Us</h2>
+            <hr className="border-white/10 my-8" />
+
+            <h2>Contact Us</h2>
             <p>
               If you have any questions about these Terms, please contact us at:{" "}
+              {/* ✅ UPDATED: Email domain to match deepsharkai.art */}
               <a
-                href="mailto:support@sharkyai.xyz"
+                href="mailto:support@deepsharkai.art"
                 className="text-teal-400 hover:underline"
               >
-                support@sharkyai.xyz
+                support@deepsharkai.art
               </a>
               .
             </p>

@@ -10,25 +10,34 @@ const razorpay = new Razorpay({
 export async function POST(req: Request) {
   try {
     const session = await auth();
-    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session?.user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { amount } = await req.json();
+    const { amount, coins } = await req.json();
 
-    if (!amount || amount < 1) { // Min 1 Rupee
+    if (!amount || amount < 1) {
+      // Min 1 Rupee
       return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
     }
 
     // Razorpay works in "Paise" (1 Rupee = 100 Paise)
     const order = await razorpay.orders.create({
-      amount: Math.round(amount * 100), 
+      amount: Math.round(amount * 100),
       currency: "INR",
       receipt: `receipt_${Date.now()}`,
+      notes: {
+        // ✅ CRITICAL: Pass data to the webhook
+        userId: session.user.id,
+        coins: coins,
+      },
     });
 
     return NextResponse.json({ orderId: order.id });
-
   } catch (error) {
     console.error("Razorpay Create Order Error:", error);
-    return NextResponse.json({ error: "Failed to create order" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to create order" },
+      { status: 500 },
+    );
   }
 }

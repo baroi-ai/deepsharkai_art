@@ -4,9 +4,8 @@ import { db } from "../../../db";
 import { users, imageGenerations } from "../../../db/schema";
 import { eq, sql } from "drizzle-orm";
 import { fal } from "@fal-ai/client";
-import { writeFile } from "fs/promises";
-import path from "path";
 import { v4 as uuidv4 } from "uuid";
+import { uploadToR2 } from "@/lib/r2"; 
 
 // Configure Fal
 fal.config({
@@ -24,19 +23,9 @@ export async function POST(req: Request) {
     const userId = session.user.id;
     const { modelId, input } = await req.json();
 
-    // --- CONFIGURATION ---
-    
-    // 1. Map to the CORRECT Model ID
-    const REAL_MODEL_MAP: Record<string, string> = {
-      "deepshark-realism":        "fal-ai/image-editing/realism", 
-      "deepshark-face-enhancement":  "fal-ai/image-editing/face-enhancement", 
-      "deepshark-retoucher":        "fal-ai/image-editing/retouch", 
-    };
+    const cost = 2;
 
-    const targetModelId = REAL_MODEL_MAP[modelId] || "fal-ai/image-editing/realism";
-    const cost = 2; // Fixed cost for retouching
-
-    // 2. Check User Credits
+    // 2. Check Credits
     const [user] = await db
       .select({ credits: users.credits })
       .from(users)
@@ -49,53 +38,77 @@ export async function POST(req: Request) {
       );
     }
 
-    // 3. Prepare Payload (Strictly what the API expects)
-    // The frontend sends prompts/strength, but 'retoucher' ONLY wants 'image_url'.
-    // We must filter the input or the API throws 422.
-    const falInput = {
-      image_url: input.image_url || input.image || input.image_urls?.[0],
-      // Add seed if you want consistency, otherwise leave it out
-    };
+    // 3. Prepare Source Image
+    const sourceImageUrl = input.image_url || input.image || input.image_urls?.[0];
 
-    if (!falInput.image_url) {
-      return NextResponse.json({ error: "No image URL provided" }, { status: 400 });
+    if (!sourceImageUrl) {
+      return NextResponse.json({ error: "No image provided" }, { status: 400 });
     }
 
-    console.log(`Generating with: ${targetModelId}`);
+    let targetModelId = "";
+    let falInput: any = {};
 
-    // 4. Generate
+    // 4. Model Selection & Logic
+    switch (modelId) {
+      case "deepshark-realism":
+        // ✅ STRATEGY: Use Nano Banana to INJECT texture
+        targetModelId = "fal-ai/nano-banana-pro/edit";
+        falInput = {
+          // The "Anti-Plastic" Prompt
+          prompt: "raw photography, hyper-realistic skin texture, visible pores, micro-details, slight freckles, peach fuzz, subsurface scattering, dslr quality, sharp focus, keep face identity exactly the same, no smoothing, no airbrushing",
+          image_urls: [sourceImageUrl],
+          num_images: 1,
+          aspect_ratio: "auto",
+          output_format: "jpeg", // JPEGs are faster for R2
+          resolution: "2K", 
+          safety_checker: true
+        };
+        break;
+
+      case "deepshark-retoucher":
+        targetModelId = "fal-ai/image-editing/retouch";
+        falInput = { image_url: sourceImageUrl };
+        break;
+
+      case "deepshark-face-enhancement":
+        targetModelId = "fal-ai/image-editing/face-enhancement";
+        falInput = { image_url: sourceImageUrl };
+        break;
+
+      default:
+        targetModelId = "fal-ai/nano-banana-pro/edit";
+        falInput = {
+          prompt: "improve image quality, realistic texture",
+          image_urls: [sourceImageUrl],
+        };
+        break;
+    }
+
+    console.log(`✨ Enhancing skin with: ${modelId}`);
+
+    // 5. Generate (Wait for Fal)
     const result: any = await fal.subscribe(targetModelId, {
-      input: falInput, // ✅ Only sending valid inputs now
+      input: falInput,
       logs: true,
     });
 
-    // 5. Extract Image URL
+    // 6. Extract Result URL Robustly
     let remoteImageUrl = "";
-    if (result.data?.image?.url) {
-      remoteImageUrl = result.data.image.url;
-    } else if (result.data?.images?.[0]?.url) {
-      remoteImageUrl = result.data.images[0].url;
-    } else {
-      console.error("Fal Response:", JSON.stringify(result.data, null, 2));
-      throw new Error("Generation failed: No output image returned");
+    if (result.data?.images?.[0]?.url) {
+      remoteImageUrl = result.data.images[0].url; 
+    } else if (result.data?.image?.url) {
+      remoteImageUrl = result.data.image.url;     
+    } else if (result.data?.url) {
+      remoteImageUrl = result.data.url;           
     }
 
-    // 6. Download & Save Locally
-    const imageResponse = await fetch(remoteImageUrl);
-    if (!imageResponse.ok) throw new Error("Failed to download generated image");
+    if (!remoteImageUrl) {
+      throw new Error("Enhancement failed: Provider returned no image URL.");
+    }
 
-    const arrayBuffer = await imageResponse.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    const filename = `${uuidv4()}.png`;
-    // Ensure public/generations exists
-    const savePath = path.join(process.cwd(), "public", "generations", filename);
-
-    await writeFile(savePath, buffer);
-
-    const localUrl = `/generations/${filename}`;
-
-    // 7. DB Transaction (Deduct & Save)
+    // 7. ✅ FAST PATH: Save Fal URL as 'fallbackUrl' & Deduct Credits
+    const generationId = uuidv4();
+    
     await db.transaction(async (tx: any) => {
       await tx
         .update(users)
@@ -103,28 +116,51 @@ export async function POST(req: Request) {
         .where(eq(users.id, userId));
 
       await tx.insert(imageGenerations).values({
+        id: generationId,
         userId: userId,
-        prompt: "Skin Enhancement (Retoucher)", // Hardcoded as this model doesn't use prompts
-        model: modelId,
-        imageUrl: localUrl,
+        prompt: `Skin Enhance`,
+        model: "DeepShark Skin Enhancer",
+        imageUrl: remoteImageUrl,    // 1. Main URL (Fal initially)
+        fallbackUrl: remoteImageUrl, // 2. ✅ Backup URL (Fal permanently)
         cost: cost,
         status: "completed",
       });
     });
 
+    // 8. ✅ BACKGROUND TASK: Upload to R2 & Update Main URL
+    (async () => {
+        try {
+            const res = await fetch(remoteImageUrl);
+            if (!res.ok) return;
+            
+            const buffer = Buffer.from(await res.arrayBuffer());
+            const filename = `users/${userId}/image/skin-enhancer/${generationId}.jpg`; 
+            
+            // Upload to R2
+            const r2Url = await uploadToR2(buffer, filename);
+            
+            // Update DB with permanent R2 URL (keep fallbackUrl as is)
+            await db.update(imageGenerations)
+                .set({ imageUrl: r2Url }) 
+                .where(eq(imageGenerations.id, generationId));
+                
+            console.log("✅ Background Enhancer upload complete");
+        } catch (err) {
+            console.error("Background Upload Error:", err);
+        }
+    })();
+
     return NextResponse.json({
       success: true,
-      imageUrl: localUrl,
+      imageUrl: remoteImageUrl,
       remainingCredits: (user.credits || 0) - cost,
     });
 
   } catch (error: any) {
-    console.error("API Generation Error:", error);
-    // Return detailed error if available
-    const errorMessage = error.body?.message || error.message || "Internal Error";
+    console.error("🚨 Skin Enhancer Error:", error);
     return NextResponse.json(
-      { error: errorMessage },
-      { status: error.status || 500 }
+      { error: error.message || "Internal Server Error" },
+      { status: 500 }
     );
   }
 }

@@ -38,7 +38,7 @@ const Footer = () => {
         <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-8">
           <div className="text-center md:text-left">
             <h3 className="text-2xl font-bold mb-2 text-teal-400 drop-shadow-[0_0_8px_rgba(20,184,166,0.5)]">
-              Sharky AI
+              DeepShark AI
             </h3>
             <div className="flex justify-center md:justify-start space-x-4">
               {socialLinks.map(({ Icon, href, label }, i) => (
@@ -59,7 +59,7 @@ const Footer = () => {
 
         <div className="pt-6 border-t border-white/5 flex flex-col md:flex-row justify-between items-center text-center md:text-left">
           <p className="text-gray-500 text-sm mb-4 md:mb-0">
-            © {new Date().getFullYear()} Sharky AI. All rights reserved.
+            © {new Date().getFullYear()} DeepShark AI. All rights reserved.
           </p>
           <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 md:gap-x-6 text-sm text-gray-500">
             {navLinks.map((link) => (

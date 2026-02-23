@@ -2,16 +2,39 @@ import { Metadata } from "next";
 import AboutContent from "@/components/about-content"; // We'll create this component below
 
 export const metadata: Metadata = {
-  title: "About DeepShark AI | Our Mission & Cloud-Based AI Tools",
+  // Focus the title on your USP and brand identity
+  title: "About DeepShark AI | The Ultimate AI Image Studio",
   description:
-    "Learn about DeepShark AI's mission to make powerful, cloud-based generative AI accessible to everyone. Discover our commitment to privacy, pay-as-you-go pricing, and cutting-edge tools for image, video, and voice creation.",
+    "Discover the mission behind DeepShark AI. We are redefining the creative workflow by giving everyone access to elite AI models to extract image layers, upscale to 4K, and edit flawlessly—with fair, pay-as-you-go pricing.",
+  keywords: [
+    "About DeepShark AI",
+    "AI Image Studio Mission",
+    "Image Decomposer tool",
+    "Pay-as-you-go AI",
+    "Extract image layers",
+    "Private AI generation",
+  ],
   openGraph: {
     type: "website",
     url: "https://deepsharkai.art/about",
-    title: "About DeepShark AI | Our Mission & Cloud-Based AI Tools",
+    title: "Our Story | DeepShark AI Image Studio",
     description:
-      "Learn about DeepShark AI's mission to make powerful, cloud-based generative AI accessible to everyone.",
-    images: [{ url: "https://deepsharkai.art/og-image-about.png" }],
+      "Learn how DeepShark AI is changing the game with our signature Image Decomposer, elite 4K upscaling, and a commitment to accessible, privacy-focused AI.",
+    images: [
+      {
+        url: "https://deepsharkai.art/og-image-about.png",
+        width: 1200,
+        height: 630,
+        alt: "About DeepShark AI - Mission and Tools",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Our Story | DeepShark AI Image Studio",
+    description:
+      "Redefining the creative workflow with elite AI models to extract layers, upscale, and edit. Read our mission.",
+    images: ["https://deepsharkai.art/og-image-about.png"],
   },
 };
 

@@ -24,7 +24,7 @@ const AIModels = async () => {
 
   return (
     <section
-      id="ai-models"
+      id="models"
       className="py-24 relative overflow-hidden bg-slate-900/30"
     >
       <div className="absolute inset-0 hero-gradient z-10"></div>

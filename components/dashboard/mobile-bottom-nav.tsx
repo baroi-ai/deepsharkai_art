@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react"; // ✅ 1. Import useEffect and useRef
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -10,11 +10,10 @@ import {
   FolderCheck,
   PlusCircle,
   ImageIcon,
-  Video,
-  AudioLines,
   ImagePlus,
   ImageUpscale,
   Dices,
+  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,15 +25,32 @@ const navItems = [
 ];
 
 const createOptions = [
-  { href: "/dashboard/image-generation", label: "Image", icon: ImageIcon },
-  { href: "/dashboard/image-upscaler", label: "Upscaler", icon: ImageUpscale },
-  { href: "/dashboard/image-edit", label: "Edit", icon: ImagePlus },
+  { href: "/dashboard/image/generator", label: "Image", icon: ImageIcon },
+  { href: "/dashboard/image/decompose", label: "Layer", icon: Layers },
+  { href: "/dashboard/image/edit", label: "Edit", icon: ImagePlus },
   { href: "/dashboard/tools", label: "More", icon: Dices },
 ];
 
 const MobileBottomNav: React.FC = () => {
   const pathname = usePathname();
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null); // ✅ 2. Create a Ref
+
+  // ✅ 3. Add Event Listener to detect clicks outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsCreateMenuOpen(false);
+      }
+    }
+
+    // Bind the event listener
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      // Unbind the event listener on clean up
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [menuRef]);
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-slate-950/90 backdrop-blur-lg md:hidden h-16">
@@ -56,7 +72,11 @@ const MobileBottomNav: React.FC = () => {
           );
         })}
 
-        <div className="relative flex h-full items-center justify-center">
+        {/* ✅ 4. Attach the Ref to the wrapper div */}
+        <div
+          ref={menuRef}
+          className="relative flex h-full items-center justify-center"
+        >
           {isCreateMenuOpen && (
             <div className="absolute bottom-full mb-4 w-40 rounded-lg border border-white/10 bg-slate-900 p-2 shadow-xl animate-in slide-in-from-bottom-2 fade-in">
               {createOptions.map((option) => (

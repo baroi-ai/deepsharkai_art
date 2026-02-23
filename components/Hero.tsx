@@ -58,20 +58,20 @@ const SNAKE_BORDER_CSS = `
 `;
 
 const leftAITools = [
-  { name: "Flux", icon: "/icons/flux.png" },
-  { name: "Ideogram", icon: "/icons/ideogram.png" },
-  { name: "Minimax", icon: "/icons/minimax.png" },
-  { name: "Wan", icon: "/icons/wan.png" },
-  { name: "Google Veo", icon: "/icons/google.png" },
+  { name: "Flux", icon: "/icons/flux.webp" },
+  { name: "Ideogram", icon: "/icons/ideogram.webp" },
+  { name: "Minimax", icon: "/icons/minimax.webp" },
+  { name: "Wan", icon: "/icons/wan.webp" },
+  { name: "Nano Banana", icon: "/icons/nano-banna.webp" },
 ];
 
 const rightAITools = [
-  { name: "Luma", icon: "/icons/luma.png" },
-  { name: "Recraft", icon: "/icons/recraft.png" },
-  { name: "Kling", icon: "/icons/kling.png" },
-  { name: "Hunyuan", icon: "/icons/hunyuan.png" },
-  { name: "Pixverser", icon: "/icons/pixverser.png" },
-  { name: "Hailuo", icon: "/icons/hailuo.png" },
+  { name: "Luma", icon: "/icons/luma.webp" },
+  { name: "Recraft", icon: "/icons/recraft.webp" },
+  { name: "Kling", icon: "/icons/kling.webp" },
+  { name: "Hunyuan", icon: "/icons/hunyuan.webp" },
+  { name: "Pixverser", icon: "/icons/pixverser.webp" },
+  // { name: "Hailuo", icon: "/icons/hailuo.webp" },
 ];
 
 const Hero = () => {
@@ -138,11 +138,12 @@ const Hero = () => {
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight">
               <span className="block">AI Image Studio</span>
               <span className="text-teal-400 mt-2 block drop-shadow-[0_0_8px_rgba(20,184,166,0.5)] whitespace-nowrap text-3xl md:text-6xl lg:text-7xl">
-                Generate • Upscale • Edit
+                Layer • Edit • Upscale
               </span>
             </h1>
             <p className="text-xl md:text-2xl text-gray-300 max-w-3xl mx-auto">
-              Create AI images, videos, and more using Multiple AI models.
+              Extract image layers, edit and upscale to 4K using elite AI
+              models.
             </p>
           </div>
 
@@ -176,7 +177,7 @@ const Hero = () => {
                   {/* The Inner Content masking the center */}
                   <div className="snake-border-content glass-panel p-4 flex items-center justify-center">
                     <img
-                      src="/logo.png"
+                      src="/logo.webp"
                       alt="Logo"
                       className="h-16 w-16 object-contain"
                     />
