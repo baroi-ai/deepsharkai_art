@@ -136,6 +136,7 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
                     <AvatarImage
                       src={user.image || ""}
                       alt={user.name || "User Avatar"}
+                      crossOrigin="anonymous"
                     />
                     <AvatarFallback className="bg-slate-800 text-teal-400 font-bold">
                       {user.name?.charAt(0).toUpperCase() || "U"}

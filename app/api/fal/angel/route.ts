@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     // --- CONFIGURATION ---
     const targetModelId =
       "fal-ai/qwen-image-edit-plus-lora-gallery/multiple-angles";
-    const cost = 4;
+    const cost = 6;
 
     // 2. Check Credits
     const [user] = await db

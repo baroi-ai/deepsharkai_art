@@ -99,8 +99,8 @@ const Hero = () => {
       mp4: "/videos/hero-background.mp4",
     },
     mobile: {
-      webm: "/videos/hero-background-mobile.webm",
-      mp4: "/videos/hero-background-mobile.mp4",
+      webm: "/videos/bg-video1.webm",
+      mp4: "/videos/bg-video1.mp4",
     },
   };
 

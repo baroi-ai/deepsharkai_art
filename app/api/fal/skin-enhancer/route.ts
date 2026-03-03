@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { db } from "../../../db"; 
+import { db } from "../../../db";
 import { users, imageGenerations } from "../../../db/schema";
 import { eq, sql } from "drizzle-orm";
 import { fal } from "@fal-ai/client";
 import { v4 as uuidv4 } from "uuid";
-import { uploadToR2 } from "@/lib/r2"; 
+import { uploadToR2 } from "@/lib/r2";
 
 // Configure Fal
 fal.config({
@@ -21,9 +21,9 @@ export async function POST(req: Request) {
     }
 
     const userId = session.user.id;
-    const { modelId, input } = await req.json();
+    const { input } = await req.json();
 
-    const cost = 2;
+    const cost = 30;
 
     // 2. Check Credits
     const [user] = await db
@@ -34,57 +34,53 @@ export async function POST(req: Request) {
     if (!user || (user.credits || 0) < cost) {
       return NextResponse.json(
         { error: "Insufficient coins", code: "INSUFFICIENT_CREDITS" },
-        { status: 402 }
+        { status: 402 },
       );
     }
 
     // 3. Prepare Source Image
-    const sourceImageUrl = input.image_url || input.image || input.image_urls?.[0];
-
+    const sourceImageUrl = input.image_url;
     if (!sourceImageUrl) {
       return NextResponse.json({ error: "No image provided" }, { status: 400 });
     }
 
-    let targetModelId = "";
-    let falInput: any = {};
+    // 4. ✅ DYNAMIC PROMPT BUILDER
+    // Grab the features toggled by the user
+    const features = input.features || {};
+    let promptAdditions = [];
 
-    // 4. Model Selection & Logic
-    switch (modelId) {
-      case "deepshark-realism":
-        // ✅ STRATEGY: Use Nano Banana to INJECT texture
-        targetModelId = "fal-ai/nano-banana-pro/edit";
-        falInput = {
-          // The "Anti-Plastic" Prompt
-          prompt: "raw photography, hyper-realistic skin texture, visible pores, micro-details, slight freckles, peach fuzz, subsurface scattering, dslr quality, sharp focus, keep face identity exactly the same, no smoothing, no airbrushing",
-          image_urls: [sourceImageUrl],
-          num_images: 1,
-          aspect_ratio: "auto",
-          output_format: "jpeg", // JPEGs are faster for R2
-          resolution: "2K", 
-          safety_checker: true
-        };
-        break;
+    if (features.freckles) promptAdditions.push("distinct natural freckles");
+    if (features.acne)
+      promptAdditions.push(
+        "subtle natural acne, slight skin blemishes, real human imperfections",
+      );
+    if (features.peachFuzz) promptAdditions.push("fine peach fuzz on skin");
+    if (features.lensFlare)
+      promptAdditions.push(
+        "cinematic lens flare, beautiful atmospheric lighting",
+      );
 
-      case "deepshark-retoucher":
-        targetModelId = "fal-ai/image-editing/retouch";
-        falInput = { image_url: sourceImageUrl };
-        break;
+    const additionsString =
+      promptAdditions.length > 0 ? ", " + promptAdditions.join(", ") : "";
 
-      case "deepshark-face-enhancement":
-        targetModelId = "fal-ai/image-editing/face-enhancement";
-        falInput = { image_url: sourceImageUrl };
-        break;
+    // Assemble the ultimate photorealism prompt
+    const finalPrompt = `raw unedited portrait photography, extreme hyper-realistic skin texture, visible pores, micro-details, subsurface scattering, dslr 85mm lens, sharp focus, exactly same face identity, no airbrushing, no smoothing${additionsString}, highly detailed, 8k resolution`;
 
-      default:
-        targetModelId = "fal-ai/nano-banana-pro/edit";
-        falInput = {
-          prompt: "improve image quality, realistic texture",
-          image_urls: [sourceImageUrl],
-        };
-        break;
-    }
+    const targetModelId = "fal-ai/nano-banana-pro/edit"; //fal-ai/flux-2/klein/9b/edit
+    const falInput = {
+      prompt: finalPrompt,
+      image_urls: [sourceImageUrl],
+      num_images: 1,
+      aspect_ratio: "auto",
+      output_format: "jpeg",
+      resolution: "2K",
+      safety_checker: true,
+      strength: input.strength ?? 0.35, // ✅ Accepts the custom strength from the UI!
+    };
 
-    console.log(`✨ Enhancing skin with: ${modelId}`);
+    console.log(
+      `✨ Enhancing skin with Nano Banana Pro (Strength: ${falInput.strength})`,
+    );
 
     // 5. Generate (Wait for Fal)
     const result: any = await fal.subscribe(targetModelId, {
@@ -95,20 +91,20 @@ export async function POST(req: Request) {
     // 6. Extract Result URL Robustly
     let remoteImageUrl = "";
     if (result.data?.images?.[0]?.url) {
-      remoteImageUrl = result.data.images[0].url; 
+      remoteImageUrl = result.data.images[0].url;
     } else if (result.data?.image?.url) {
-      remoteImageUrl = result.data.image.url;     
+      remoteImageUrl = result.data.image.url;
     } else if (result.data?.url) {
-      remoteImageUrl = result.data.url;           
+      remoteImageUrl = result.data.url;
     }
 
     if (!remoteImageUrl) {
       throw new Error("Enhancement failed: Provider returned no image URL.");
     }
 
-    // 7. ✅ FAST PATH: Save Fal URL as 'fallbackUrl' & Deduct Credits
+    // 7. Save Fal URL as 'fallbackUrl' & Deduct Credits
     const generationId = uuidv4();
-    
+
     await db.transaction(async (tx: any) => {
       await tx
         .update(users)
@@ -118,36 +114,35 @@ export async function POST(req: Request) {
       await tx.insert(imageGenerations).values({
         id: generationId,
         userId: userId,
-        prompt: `Skin Enhance`,
-        model: "DeepShark Skin Enhancer",
-        imageUrl: remoteImageUrl,    // 1. Main URL (Fal initially)
-        fallbackUrl: remoteImageUrl, // 2. ✅ Backup URL (Fal permanently)
+        prompt: `Skin Enhance - Strength: ${falInput.strength}`,
+        model: "Nano Banana Pro Skin",
+        imageUrl: remoteImageUrl,
+        fallbackUrl: remoteImageUrl,
         cost: cost,
         status: "completed",
       });
     });
 
-    // 8. ✅ BACKGROUND TASK: Upload to R2 & Update Main URL
+    // 8. BACKGROUND TASK: Upload to R2
     (async () => {
-        try {
-            const res = await fetch(remoteImageUrl);
-            if (!res.ok) return;
-            
-            const buffer = Buffer.from(await res.arrayBuffer());
-            const filename = `users/${userId}/image/skin-enhancer/${generationId}.jpg`; 
-            
-            // Upload to R2
-            const r2Url = await uploadToR2(buffer, filename);
-            
-            // Update DB with permanent R2 URL (keep fallbackUrl as is)
-            await db.update(imageGenerations)
-                .set({ imageUrl: r2Url }) 
-                .where(eq(imageGenerations.id, generationId));
-                
-            console.log("✅ Background Enhancer upload complete");
-        } catch (err) {
-            console.error("Background Upload Error:", err);
-        }
+      try {
+        const res = await fetch(remoteImageUrl);
+        if (!res.ok) return;
+
+        const buffer = Buffer.from(await res.arrayBuffer());
+        const filename = `users/${userId}/image/skin-enhancer/${generationId}.jpg`;
+
+        const r2Url = await uploadToR2(buffer, filename);
+
+        await db
+          .update(imageGenerations)
+          .set({ imageUrl: r2Url })
+          .where(eq(imageGenerations.id, generationId));
+
+        console.log("✅ Background Enhancer upload complete");
+      } catch (err) {
+        console.error("Background Upload Error:", err);
+      }
     })();
 
     return NextResponse.json({
@@ -155,12 +150,11 @@ export async function POST(req: Request) {
       imageUrl: remoteImageUrl,
       remainingCredits: (user.credits || 0) - cost,
     });
-
   } catch (error: any) {
     console.error("🚨 Skin Enhancer Error:", error);
     return NextResponse.json(
       { error: error.message || "Internal Server Error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

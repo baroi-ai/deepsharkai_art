@@ -15,6 +15,7 @@ import {
   Trash2,
   Coins,
   Undo2,
+  Paperclip,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Slider } from "@/components/ui/slider";
@@ -54,6 +55,12 @@ const ImageEditingPage = () => {
   );
   const [mainImageFile, setMainImageFile] = useState<File | null>(null);
 
+  // Reference Image State
+  const [referenceImageFile, setReferenceImageFile] = useState<File | null>(
+    null,
+  );
+  const [referencePreview, setReferencePreview] = useState<string | null>(null);
+
   // Inpainting State
   const [isInpaintMode, setIsInpaintMode] = useState(false);
   const [drawingTool, setDrawingTool] = useState<"brush" | "eraser">("brush");
@@ -67,6 +74,7 @@ const ImageEditingPage = () => {
 
   // Refs
   const mainInputRef = useRef<HTMLInputElement>(null);
+  const referenceInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
@@ -235,6 +243,26 @@ const ImageEditingPage = () => {
     }
   };
 
+  const handleReferenceImageChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024)
+        return toast.error("Max file size 10MB");
+
+      setReferenceImageFile(file);
+      setReferencePreview(URL.createObjectURL(file));
+      e.target.value = "";
+    }
+  };
+
+  const removeReferenceImage = () => {
+    if (referencePreview) URL.revokeObjectURL(referencePreview);
+    setReferencePreview(null);
+    setReferenceImageFile(null);
+  };
+
   const handleClear = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
 
@@ -253,6 +281,7 @@ const ImageEditingPage = () => {
     setIsInpaintMode(false);
     setHasDrawnMask(false);
     setActiveJobs([]);
+    removeReferenceImage();
     if (mainInputRef.current) mainInputRef.current.value = "";
   };
 
@@ -282,7 +311,6 @@ const ImageEditingPage = () => {
       let mainUrl = "";
 
       if (currentImagePreview.startsWith("data:")) {
-        // Upload initial file
         if (mainImageFile) {
           mainUrl = await fal.storage.upload(mainImageFile);
         } else {
@@ -291,9 +319,6 @@ const ImageEditingPage = () => {
           mainUrl = await fal.storage.upload(blob);
         }
       } else {
-        // Re-uploading a remote/local result for the next edit
-        // This ensures Fal can always access the latest version
-        console.log("Uploading existing image for edit...");
         const response = await fetch(currentImagePreview);
         const blob = await response.blob();
         mainUrl = await fal.storage.upload(blob);
@@ -305,7 +330,13 @@ const ImageEditingPage = () => {
         maskUrl = await fal.storage.upload(maskBlob);
       }
 
-      // 4. Call API
+      // 4. Upload Reference Image
+      let referenceUrl = null;
+      if (referenceImageFile) {
+        referenceUrl = await fal.storage.upload(referenceImageFile);
+      }
+
+      // 5. Call API
       const response = await fetch("/api/fal/inpainting", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -314,6 +345,7 @@ const ImageEditingPage = () => {
             prompt: prompt,
             image_url: mainUrl,
             mask_url: maskUrl,
+            reference_image_url: referenceUrl,
           },
         }),
       });
@@ -333,6 +365,7 @@ const ImageEditingPage = () => {
       setIsInpaintMode(false);
       setHasDrawnMask(false);
       setPrompt("");
+      removeReferenceImage();
 
       toast.success("Generation Complete!");
     } catch (error: any) {
@@ -380,12 +413,11 @@ const ImageEditingPage = () => {
 
           {currentImagePreview && activeJobs.length === 0 && (
             <div className="no-sidebar-swipe relative rounded-xl overflow-hidden shadow-2xl border border-gray-800 bg-black/40 group w-fit h-auto animate-in fade-in duration-300">
-              {/* Standard img for Canvas compatibility */}
               <img
                 ref={imageRef}
                 src={currentImagePreview}
                 alt="Work"
-                crossOrigin="anonymous" // Important for canvas
+                crossOrigin="anonymous"
                 className={`max-h-[65vh] max-w-full w-auto object-contain block ${
                   isInpaintMode ? "cursor-crosshair" : ""
                 }`}
@@ -523,71 +555,115 @@ const ImageEditingPage = () => {
           )}
         </div>
 
-        <div className="relative w-full max-w-4xl mx-auto p-1 rounded-xl flex items-center gap-2 bg-transparent border border-gray-700 min-h-[54px]">
-          {!currentImagePreview && (
-            <div className="relative pl-2">
-              <input
-                ref={mainInputRef}
-                type="file"
-                className="hidden"
-                accept="image/*"
-                onChange={handleMainImageChange}
+        {/* ✅ Compact Input Bar */}
+        <div className="flex flex-col gap-2 w-full max-w-4xl mx-auto">
+          <div className="relative w-full p-1 rounded-xl flex items-center gap-2 bg-transparent border border-gray-700 min-h-[54px]">
+            {/* Left Upload/Reference Button */}
+            {!currentImagePreview ? (
+              <div className="relative pl-2">
+                <input
+                  ref={mainInputRef}
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handleMainImageChange}
+                />
+                <Button
+                  variant="ghost"
+                  className="h-10 w-10 rounded-lg text-gray-400 hover:text-cyan-400 hover:bg-gray-800/50"
+                  onClick={() => mainInputRef.current?.click()}
+                >
+                  <UploadCloud className="h-6 w-6" />
+                </Button>
+              </div>
+            ) : (
+              <div className="relative pl-2 flex items-center">
+                <input
+                  ref={referenceInputRef}
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handleReferenceImageChange}
+                />
+
+                {/* Show Preview Thumbnail OR Paperclip */}
+                {referencePreview ? (
+                  <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-cyan-500/50 group animate-in zoom-in-95 duration-200 shadow-md">
+                    <img
+                      src={referencePreview}
+                      className="w-full h-full object-cover"
+                      alt="Reference"
+                    />
+                    <div
+                      className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer"
+                      onClick={removeReferenceImage}
+                      title="Remove reference"
+                    >
+                      <XCircle className="w-5 h-5 text-red-400" />
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-10 rounded-lg text-gray-400 hover:text-cyan-400 hover:bg-gray-800/50 transition-colors"
+                    onClick={() => referenceInputRef.current?.click()}
+                    title="Add reference image"
+                    disabled={isLoading}
+                  >
+                    <Paperclip className="h-5 w-5" />
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {/* Textarea */}
+            <div className="relative flex-grow">
+              <Textarea
+                ref={textareaRef}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder={
+                  referencePreview
+                    ? "Describe how to use this reference..."
+                    : "Describe the edit..."
+                }
+                className="w-full bg-transparent border-none focus:ring-0 resize-none text-sm md:text-base text-gray-200 placeholder-gray-500 py-3 min-h-[50px] max-h-[80px] leading-tight pr-12"
+                rows={1}
+                maxLength={1000}
+                disabled={isLoading || !currentImagePreview}
               />
+            </div>
+
+            {/* Generate Button */}
+            <div className="pr-2">
               <Button
-                variant="ghost"
-                className="h-10 w-10 rounded-lg text-gray-400 hover:text-cyan-400 hover:bg-gray-800/50"
-                onClick={() => mainInputRef.current?.click()}
+                onClick={handleGenerate}
+                disabled={
+                  isLoading ||
+                  !currentImagePreview ||
+                  (isInpaintMode && !hasDrawnMask) ||
+                  !prompt
+                }
+                className={`h-9 px-4 rounded-full font-medium transition-all text-xs flex items-center gap-1.5 ${
+                  isLoading ||
+                  !currentImagePreview ||
+                  (isInpaintMode && !hasDrawnMask) ||
+                  !prompt
+                    ? "bg-gray-700 text-gray-500 cursor-not-allowed"
+                    : "bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white shadow-lg"
+                }`}
               >
-                <UploadCloud className="h-6 w-6" />
+                {isLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <span className="whitespace-nowrap">15</span>{" "}
+                    <Coins className="w-3.5 h-3.5" />
+                  </>
+                )}
               </Button>
             </div>
-          )}
-
-          <div className="relative flex-grow">
-            <Textarea
-              ref={textareaRef}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder={"Describe"}
-              className="w-full bg-transparent border-none focus:ring-0 resize-none text-sm md:text-base text-gray-200 placeholder-gray-500 py-3 min-h-[50px] max-h-[80px] leading-tight pr-12"
-              rows={1}
-              maxLength={1000}
-              disabled={isLoading || !currentImagePreview}
-            />
-            {prompt.length > 0 && (
-              <span className="absolute bottom-1 right-2 text-[10px] text-gray-600">
-                {prompt.length}/1000
-              </span>
-            )}
-          </div>
-
-          <div className="pr-2">
-            <Button
-              onClick={handleGenerate}
-              disabled={
-                isLoading ||
-                !currentImagePreview ||
-                (isInpaintMode && !hasDrawnMask) ||
-                !prompt
-              }
-              className={`h-9 px-4 rounded-full font-medium transition-all text-xs flex items-center gap-1.5 ${
-                isLoading ||
-                !currentImagePreview ||
-                (isInpaintMode && !hasDrawnMask) ||
-                !prompt
-                  ? "bg-gray-700 text-gray-500 cursor-not-allowed"
-                  : "bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white shadow-lg"
-              }`}
-            >
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <>
-                  <span className="whitespace-nowrap">15</span>{" "}
-                  <Coins className="w-3.5 h-3.5" />
-                </>
-              )}
-            </Button>
           </div>
         </div>
       </div>

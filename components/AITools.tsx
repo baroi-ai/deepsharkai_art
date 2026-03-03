@@ -8,30 +8,112 @@ import {
   AudioLines,
   Box,
   Sparkles,
+  Bolt,
 } from "lucide-react";
-import { db } from "../app/db";
-import { aiTools } from "../app/db/schema";
-import { desc } from "drizzle-orm";
 
-// ✅ 1. CACHING
-export const revalidate = 3600;
+// ✅ HARDCODED STATIC DATA
+const staticTools = [
+  {
+    id: 1,
+    name: "Magic eraser",
+    description: "Remove any object from image",
+    image_url: "/tools/magic_eraser.webm",
+    link: "/dashboard/image/eraser",
+    badge: "Free",
+  },
+  {
+    id: 2,
+    name: "Caption Generator",
+    description: "Generate caption for free",
+    image_url: "/tools/caption.webm",
+    link: "/dashboard/video/caption",
+    badge: "Free",
+  },
+  {
+    id: 3,
+    name: "Frame Extractor",
+    description: "Extract Frames from video.",
+    image_url: "/tools/Fame-extarctor-tool.webm",
+    link: "/dashboard/video/frame-extractor",
+    badge: "Free",
+  },
+  {
+    id: 4,
+    name: "Bg Remover",
+    description: "Remove Any Image background",
+    image_url: "/tools/image-bg-remover-toll.webm",
+    link: "/dashboard/image/bg-remover",
+    badge: "Free",
+  },
+  {
+    id: 5,
+    name: "Transcribe ",
+    description: "Transcribe Any audio or video file",
+    image_url: "/tools/transciber.webm",
+    link: "/dashboard/text/transcribe",
+    badge: "Free",
+  },
+  {
+    id: 6,
+    name: "Audio Enhancer",
+    description: "Clean background noise and enhance speech automatically",
+    imageUrl: "/tools/transciber.webm",
+    link: "/dashboard/audio/enhance",
+    badge: "Free",
+  },
+  {
+    id: 7,
+    name: "Bg Remover",
+    description: "Remove Any Image background",
+    imageUrl: "/tools/image-bg-remover-toll.webm",
+    link: "/dashboard/image/bg-remover",
+    badge: "Free",
+  },
+  {
+    id: 8,
+    name: "AI Image Generator",
+    description: "Generate Image using multiple Ai models",
+    imageUrl: "/tools/ai-image-generator.webm",
+    link: "/dashboard/image/generator",
+    badge: "hot",
+  },
+  {
+    id: 9,
+    name: "Upscaler",
+    description: "Instantly upscale you images in 4K",
+    imageUrl: "/tools/image-upsclaer-tool.webm",
+    link: "/dashboard/image/upscaler",
+    badge: "Hot",
+  },
+  {
+    id: 10,
+    name: "Skin Enhancer",
+    description: "Get red of ai plastic skin",
+    imageUrl: "/tools/skin-enchor-tool.webm",
+    link: "/dashboard/image/skin-enhancer",
+    badge: null,
+  },
+  {
+    id: 11,
+    name: "Layers",
+    description: "Extract Layers from image",
+    imageUrl: "/tools/decompose.webm",
+    link: "/dashboard/image/layers",
+    badge: "Hot",
+  },
+  {
+    id: 12,
+    name: "Image Editor",
+    description: "Edit image with text and inpaint",
+    imageUrl: "/tools/image-editor-tool.webm",
+    link: "/dashboard/image/edit",
+    badge: null,
+  },
+];
 
-// ✅ 2. ICON MAPPER
-const ICON_MAP: Record<string, any> = {
-  ImagePlus: ImagePlus,
-  Video: Video,
-  AudioLines: AudioLines,
-  Box: Box,
-  default: Sparkles,
-};
-
-const AITools = async () => {
-  // ✅ 3. FETCH FROM DB
-  const tools = await db
-    .select()
-    .from(aiTools)
-    .orderBy(desc(aiTools.id))
-    .limit(11);
+const AITools = () => {
+  // We slice the array to exactly 11 items to make the perfect 7 - 3 - 1 pyramid
+  const toolsToDisplay = staticTools.slice(0, 11);
 
   return (
     <section id="tools" className="py-24 relative overflow-hidden bg-slate-950">
@@ -41,11 +123,14 @@ const AITools = async () => {
 
       <div className="container mx-auto px-4 md:px-6 relative z-10">
         <div className="max-w-xl mx-auto text-center mb-12">
-          <span className="mb-4 inline-block border border-teal-400/30 text-teal-400 px-3 py-1 text-sm rounded-md">
-            Featured AI Tools
+          <span className="mb-4 inline-flex items-center gap-2 border border-teal-400/30 text-teal-400 px-3 py-1 text-sm rounded-md bg-teal-500/10">
+            <Bolt className="w-4 h-4" /> Featured AI Tools
           </span>
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            Explore latest AI Tools
+          <h2 className="text-3xl md:text-5xl font-bold mb-4 text-white">
+            Explore{" "}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-cyan-400">
+              latest AI Tools
+            </span>
           </h2>
           <p className="text-gray-400 text-lg">
             Discover Ai Tools with Multiple Ai models.
@@ -54,24 +139,26 @@ const AITools = async () => {
 
         {/* Tools Grid */}
         <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
-          {tools.map((tool, index) => {
-            const imageUrl = tool.imageUrl || "";
+          {toolsToDisplay.map((tool, index) => {
+            // Safely grab the URL regardless of whether the array uses image_url or imageUrl
+            const imageUrl = tool.imageUrl || (tool as any).image_url || "";
             const isVideo =
               imageUrl.endsWith(".mp4") || imageUrl.endsWith(".webm");
 
-            // ✅ 4. PYRAMID LAYOUT LOGIC (7 - 3 - 1)
+            // ✅ PYRAMID LAYOUT LOGIC (7 - 3 - 1)
             let positioningClass = "";
             if (index === 7) {
+              // The 8th item (starts the row of 3) is pushed to the 3rd column
               positioningClass = "lg:col-start-3";
             } else if (index === 10) {
+              // The 11th item (the final single item) is pushed to the 4th (center) column
               positioningClass = "lg:col-start-4";
             }
 
-            // ✅ 5. MOBILE HIDDEN LOGIC
-            // If the item is the 10th or 11th (index 9 or 10), hide it on mobile, show on md and up.
+            // ✅ MOBILE DEVICE LOGIC (Only show first 9 items on mobile)
             const mobileHiddenClass = index >= 9 ? "hidden md:block" : "";
 
-            // ✅ 6. BADGE LOGIC
+            // BADGE LOGIC
             const isFree = tool.badge?.toLowerCase().trim() === "free";
             const badgeClass = isFree
               ? "bg-emerald-500 text-black shadow-[0_0_15px_rgba(16,185,129,0.7)] ring-1 ring-emerald-300 animate-pulse border-none"
@@ -81,7 +168,6 @@ const AITools = async () => {
               <Link
                 key={tool.id}
                 href={tool.link || "#"}
-                // Added mobileHiddenClass here 👇
                 className={`group relative aspect-square rounded-xl overflow-hidden cursor-pointer border border-white/5 hover:border-teal-500/50 transition-all duration-300 shadow-lg hover:scale-105 ${positioningClass} ${mobileHiddenClass}`}
               >
                 {/* Badge */}
@@ -103,7 +189,7 @@ const AITools = async () => {
                       playsInline
                       className="absolute inset-0 w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-300"
                     >
-                      <source src={imageUrl} type="video/mp4" />
+                      <source src={imageUrl} type="video/webm" />
                     </video>
                   ) : (
                     <img

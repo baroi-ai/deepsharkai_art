@@ -1,22 +1,8 @@
 "use client";
 
-import React, {
-  useState,
-  useMemo,
-  useEffect,
-  useRef,
-  useLayoutEffect,
-} from "react";
-// ✅ Import Next Image
+import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -27,19 +13,10 @@ import {
   ScanFace,
   XCircle,
   MoveHorizontal,
-  Settings,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog";
+import { Slider } from "@/components/ui/slider";
 import { useSession } from "next-auth/react";
 import { AuthModal } from "@/components/AuthModal";
 import { fal } from "@fal-ai/client";
@@ -48,7 +25,7 @@ fal.config({
   proxyUrl: "/api/fal/proxy",
 });
 
-// --- FIXED Helper Component: Compare Slider ---
+// --- Helper Component: Compare Slider ---
 const CompareSlider = ({
   original,
   enhanced,
@@ -76,14 +53,12 @@ const CompareSlider = ({
       onMouseMove={handleMouseMove}
       onTouchMove={handleMouseMove}
     >
-      {/* 1. SKELETON (Invisible) */}
       <img
         src={original}
         alt="Reference"
         className="block max-h-[60vh] w-auto h-auto opacity-0 pointer-events-none"
       />
 
-      {/* 2. BACKGROUND (Enhanced/Remote) */}
       <div className="absolute inset-0 w-full h-full">
         <Image
           src={enhanced}
@@ -91,11 +66,10 @@ const CompareSlider = ({
           fill
           className="object-contain"
           priority
-          unoptimized={true} // Bypass COEP
+          unoptimized={true}
         />
       </div>
 
-      {/* 3. FOREGROUND (Original) - SLIDING WINDOW */}
       <div
         className="absolute inset-0 h-full overflow-hidden border-r-2 border-white/50 z-10"
         style={{ width: `${sliderPosition}%` }}
@@ -127,7 +101,6 @@ const CompareSlider = ({
         </div>
       </div>
 
-      {/* 4. HANDLE */}
       <div
         className="absolute top-0 bottom-0 w-1 bg-white/80 cursor-ew-resize shadow-[0_0_15px_rgba(0,0,0,0.5)] flex items-center justify-center z-20"
         style={{ left: `${sliderPosition}%` }}
@@ -148,21 +121,6 @@ const CompareSlider = ({
 };
 
 // --- Page Component ---
-
-interface ModelSettingsConfig {
-  negativePrompt?: { paramNameBackend: string };
-  condition?: (state: { sourceImageFile: File | null }) => boolean;
-}
-
-interface AvailableModel {
-  id: string;
-  name: string;
-  iconPath: string;
-  supportsImageInput?: { paramNameBackend: string };
-  isPerMegapixel?: boolean;
-  settingsConfig?: ModelSettingsConfig;
-}
-
 interface GenerationJob {
   id: string;
   status: "processing" | "completed" | "failed";
@@ -170,53 +128,31 @@ interface GenerationJob {
   originalUrl?: string;
 }
 
-const availableModels: AvailableModel[] = [
-  {
-    id: "deepshark-realism",
-    name: "Deepshark Realism",
-    iconPath: "/logo.webp",
-    supportsImageInput: { paramNameBackend: "image" },
-  },
-  {
-    id: "deepshark-face-enhancement",
-    name: "Deepshark Face Enhancement",
-    iconPath: "/icons/Topaz-ai.webp",
-    supportsImageInput: { paramNameBackend: "image" },
-  },
-  {
-    id: "deepshark-retoucher",
-    name: "Deepshark Retoucher",
-    iconPath: "/icons/clarityai.webp",
-    supportsImageInput: { paramNameBackend: "image_urls" },
-  },
-];
-
-const defaultSettings = {
-  prompt: "",
-  model: availableModels[0].id,
-};
-
 const SkinEnhancerPage = () => {
   const { data: session } = useSession();
   const isAuthenticated = !!session?.user;
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [prompt, setPrompt] = useState(defaultSettings.prompt); // Used for UI display only
-  const [selectedModel, setSelectedModel] = useState(defaultSettings.model);
-
   const [sourceImageFile, setSourceImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [downloadingIndex, setDownloadingIndex] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [activeJobs, setActiveJobs] = useState<GenerationJob[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const currentModel = useMemo(
-    () => availableModels.find((m) => m.id === selectedModel),
-    [selectedModel],
-  );
+  // ✅ NEW STATES: Strength and Features
+  const [strength, setStrength] = useState<number>(0.35);
+  const [features, setFeatures] = useState({
+    freckles: false,
+    acne: false,
+    peachFuzz: true, // Default to true for realism
+    lensFlare: false,
+  });
+
+  const toggleFeature = (key: keyof typeof features) => {
+    setFeatures((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   // Cleanup
   useEffect(() => {
@@ -248,14 +184,13 @@ const SkinEnhancerPage = () => {
 
   const handleGenerate = async () => {
     if (!isAuthenticated) return setIsAuthModalOpen(true);
-    if (!currentModel) return;
-    if (!sourceImageFile && currentModel.supportsImageInput) {
+    if (!sourceImageFile) {
       toast.error("Please upload an image to enhance.");
       return;
     }
 
     setIsLoading(true);
-    toast.info(`Enhancing... (Cost: 2 coins)`);
+    toast.info(`Enhancing... (Cost: 30 coins)`);
 
     const newJobId = `job-${Date.now()}`;
     setActiveJobs([
@@ -268,23 +203,17 @@ const SkinEnhancerPage = () => {
     ]);
 
     try {
-      let imageUrl = null;
-      if (sourceImageFile) {
-        imageUrl = await fal.storage.upload(sourceImageFile);
-      }
-
-      let input: any = { image_url: imageUrl };
-
-      if (currentModel.supportsImageInput?.paramNameBackend === "image_urls") {
-        input = { image_urls: [imageUrl] };
-      }
+      const imageUrl = await fal.storage.upload(sourceImageFile);
 
       const response = await fetch("/api/fal/skin-enhancer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          modelId: currentModel.id,
-          input: input,
+          input: {
+            image_url: imageUrl,
+            strength: strength,
+            features: features,
+          },
         }),
       });
 
@@ -338,10 +267,6 @@ const SkinEnhancerPage = () => {
     }
   };
 
-  const showSettingsButton = useMemo(() => {
-    return !!currentModel?.settingsConfig;
-  }, [currentModel]);
-
   return (
     <div className="flex flex-col h-full text-gray-300">
       <div className="flex-grow overflow-y-auto p-4 md:p-6 flex flex-col justify-center min-h-[60vh]">
@@ -354,7 +279,7 @@ const SkinEnhancerPage = () => {
                 AI Skin Enhancer
               </h1>
               <p className="text-gray-500 max-w-md">
-                Upload a face to fix texture and lighting.
+                Upload a face to fix texture, add realism, and More.
               </p>
             </div>
           )}
@@ -458,49 +383,90 @@ const SkinEnhancerPage = () => {
         </div>
       </div>
 
-      {/* Input Bar */}
+      {/* Input Bar & Settings Area */}
       <div className="w-full px-4 pb-4 pt-2 bg-transparent">
-        <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-2 text-xs max-w-4xl mx-auto mb-3">
-          <div className="flex items-center gap-1 sm:gap-2">
-            <Select
-              value={selectedModel}
-              onValueChange={setSelectedModel}
+        <div className="flex flex-col md:flex-row items-center justify-center gap-6 max-w-4xl mx-auto mb-4">
+          {/* Strength Slider */}
+          <div className="flex flex-col w-full md:w-1/2 gap-3">
+            {/* ✅ We also make the header w-[85%] so the badge lines up perfectly with the edge of the slider */}
+            <div className="flex justify-between items-center w-[85%]">
+              <Label className="text-xs font-medium text-gray-400">
+                Enhancement Strength
+              </Label>
+              {/* Changed badge color to teal to match the slider */}
+              <span className="text-[10px] text-teal-400 font-mono bg-teal-500/10 px-1.5 py-0.5 rounded">
+                {Math.round(strength * 100)}%
+              </span>
+            </div>
+            <Slider
+              min={0.1}
+              max={0.7}
+              step={0.05}
+              value={[strength]}
+              onValueChange={(v) => setStrength(v[0])}
               disabled={isLoading}
-            >
-              <SelectTrigger className="bg-transparent border-none text-gray-400 hover:text-gray-200 focus:ring-0 p-0 h-auto text-xs pr-2">
-                <SelectValue placeholder="Select model" />
-              </SelectTrigger>
-              <SelectContent
-                position="popper"
-                side="top"
-                className="bg-slate-950 border-white/10 text-gray-300"
-              >
-                {availableModels.map((model) => (
-                  <SelectItem key={model.id} value={model.id}>
-                    <div className="flex items-center gap-2">
-                      <img
-                        src={model.iconPath}
-                        alt={model.name}
-                        className="w-4 h-4 object-contain"
-                      />
-                      <span>{model.name}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              // ✅ Reduced width to 85%, and added teal fill for the dragged range and thumb border
+              className="w-[85%] [&_[data-radix-slider-range]]:!bg-teal-500 [&_[role=slider]]:border-teal-500"
+            />
           </div>
 
-          {showSettingsButton && (
-            <Button
-              variant="ghost"
-              onClick={() => setIsSettingsOpen(true)}
-              disabled={isLoading}
-              className="h-auto p-0 text-gray-400 hover:text-gray-200 focus:ring-0"
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
-          )}
+          {/* Feature Toggles */}
+          <div className="flex flex-col w-full md:w-1/2 gap-2">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => toggleFeature("peachFuzz")}
+                disabled={isLoading}
+                className={`h-7 px-3 text-[10px] rounded-full transition-colors ${
+                  features.peachFuzz
+                    ? "bg-cyan-500/20 border-cyan-500 text-cyan-400"
+                    : "bg-gray-800 border-gray-700 text-gray-400"
+                }`}
+              >
+                Peach Fuzz
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => toggleFeature("freckles")}
+                disabled={isLoading}
+                className={`h-7 px-3 text-[10px] rounded-full transition-colors ${
+                  features.freckles
+                    ? "bg-cyan-500/20 border-cyan-500 text-cyan-400"
+                    : "bg-gray-800 border-gray-700 text-gray-400"
+                }`}
+              >
+                Freckles
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => toggleFeature("acne")}
+                disabled={isLoading}
+                className={`h-7 px-3 text-[10px] rounded-full transition-colors ${
+                  features.acne
+                    ? "bg-cyan-500/20 border-cyan-500 text-cyan-400"
+                    : "bg-gray-800 border-gray-700 text-gray-400"
+                }`}
+              >
+                Subtle Acne
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => toggleFeature("lensFlare")}
+                disabled={isLoading}
+                className={`h-7 px-3 text-[10px] rounded-full transition-colors ${
+                  features.lensFlare
+                    ? "bg-cyan-500/20 border-cyan-500 text-cyan-400"
+                    : "bg-gray-800 border-gray-700 text-gray-400"
+                }`}
+              >
+                Lens Flare
+              </Button>
+            </div>
+          </div>
         </div>
 
         <div className="relative w-full max-w-4xl mx-auto p-1 rounded-xl flex items-start gap-3">
@@ -529,15 +495,14 @@ const SkinEnhancerPage = () => {
           </div>
 
           <div className="flex-grow relative flex items-center">
-            {/* ✅ RESTORED: The Disabled Prompt Box */}
             <Textarea
               id="prompt"
               placeholder="Enhance"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
+              value=""
+              readOnly
               rows={1}
               disabled={true}
-              className="flex-grow bg-gray-900/30 border border-gray-800 rounded-lg resize-none text-base text-gray-500 pl-4 pr-32 py-3.5 self-center min-h-[54px] cursor-not-allowed select-none"
+              className="flex-grow bg-gray-900/30 border border-gray-800 rounded-lg resize-none text-base text-gray-500 pl-4 pr-32 py-3.5 md:py-4 self-center min-h-[48px] md:min-h-[56px] cursor-not-allowed select-none"
             />
             <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center">
               <Button
@@ -550,7 +515,7 @@ const SkinEnhancerPage = () => {
                 ) : (
                   <>
                     <span className="text-xs font-semibold whitespace-nowrap">
-                      2
+                      30
                     </span>
                     <Coins className="w-3.5 h-3.5" />
                   </>
@@ -560,19 +525,6 @@ const SkinEnhancerPage = () => {
           </div>
         </div>
       </div>
-
-      <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-        <DialogContent className="bg-gray-800 border-gray-700 text-gray-200">
-          <DialogHeader>
-            <DialogTitle>Settings</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <p className="text-sm text-gray-400">
-              No advanced settings for this model.
-            </p>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <AuthModal
         open={isAuthModalOpen}

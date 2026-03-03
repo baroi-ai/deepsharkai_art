@@ -11,10 +11,16 @@ const razorpay = new Razorpay({
 });
 
 // ⚡️ TODO: Ensure these IDs match your actual Razorpay Dashboard Plan IDs
+//const PLAN_MAP: Record<string, string> = {
+//starter: "plan_SDCluvRpp1nJKc",
+//pro: "plan_SDCmPcpuMWtDJN",
+//elite: "plan_SDCnGyjEmEx5wH",
+//};
+
 const PLAN_MAP: Record<string, string> = {
-  starter: "plan_SDCluvRpp1nJKc",
-  pro: "plan_SDCmPcpuMWtDJN",
-  elite: "plan_SDCnGyjEmEx5wH",
+  starter: process.env.NEXT_PUBLIC_RAZORPAY_PLAN_ID_STARTER!,
+  pro: process.env.NEXT_PUBLIC_RAZORPAY_PLAN_ID_PRO!,
+  elite: process.env.NEXT_PUBLIC_RAZORPAY_PLAN_ID_ELITE!,
 };
 
 export async function POST(req: Request) {

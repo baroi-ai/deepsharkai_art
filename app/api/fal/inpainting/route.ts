@@ -25,7 +25,7 @@ export async function POST(req: Request) {
 
     // 2. Configuration
     const hasMask = !!input.mask_url;
-    // ✅ SWITCH TO NANO BANANA PRO (Smart Editing)
+    const hasReference = !!input.reference_image_url;
     const targetModelId = "fal-ai/nano-banana-pro/edit";
     const cost = 15;
 
@@ -50,26 +50,33 @@ export async function POST(req: Request) {
       );
     }
 
-    console.log(`🎨 Editing with: ${targetModelId} | Mask: ${hasMask}`);
+    console.log(`🎨 Editing | Mask: ${hasMask} | Ref: ${hasReference}`);
 
     // 5. Construct Payload
+    // Nano Banana Pro expects images in this order: [Main Image, Mask Image, Reference Image]
     const imageList = [input.image_url];
     let finalPrompt = input.prompt;
 
     if (hasMask) {
       imageList.push(input.mask_url);
-      finalPrompt = `${input.prompt}. Use the second image as a masking guide for the edit area.`;
+      // We don't modify the prompt for the mask, the AI understands order
+    }
+
+    if (hasReference) {
+      imageList.push(input.reference_image_url);
+      // Explicitly tell the AI to use the attached reference image
+      finalPrompt = `${input.prompt}. Use the provided reference image for stylistic/object guidance.`;
     }
 
     const falInput: any = {
       prompt: finalPrompt,
       image_urls: imageList,
-      output_format: "jpeg", // JPEGs are smaller/faster for R2
+      output_format: "jpeg",
       resolution: "1K",
       limit_generations: true,
     };
 
-    // 6. Generate (Wait for Fal)
+    // 6. Generate
     const result: any = await fal.subscribe(targetModelId, {
       input: falInput,
       logs: true,
@@ -83,7 +90,7 @@ export async function POST(req: Request) {
       throw new Error("No image returned from API");
     }
 
-    // 8. ✅ FAST PATH: Deduct Credits & Save Fallback Immediately
+    // 8. FAST PATH: Deduct Credits
     const generationId = uuidv4();
 
     await db.transaction(async (tx: any) => {
@@ -95,28 +102,26 @@ export async function POST(req: Request) {
       await tx.insert(imageGenerations).values({
         id: generationId,
         userId: userId,
-        prompt: input.prompt,
+        prompt: input.prompt, // Store user's original prompt, not the system modified one
         model: "Deepshark inpaint",
-        imageUrl: remoteImageUrl, // 1. Main URL (Fal initially)
-        fallbackUrl: remoteImageUrl, // 2. ✅ Backup URL (Fal permanently)
+        imageUrl: remoteImageUrl,
+        fallbackUrl: remoteImageUrl,
         cost: cost,
         status: "completed",
       });
     });
 
-    // 9. ✅ BACKGROUND TASK: Upload to R2 & Update Main URL
+    // 9. BACKGROUND TASK: R2
     (async () => {
       try {
         const res = await fetch(remoteImageUrl);
         if (!res.ok) return;
 
         const buffer = Buffer.from(await res.arrayBuffer());
-        const filename = `users/${userId}/image/edits/${generationId}.jpg`; // Organized structure
+        const filename = `users/${userId}/image/edits/${generationId}.jpg`;
 
-        // Upload to R2
         const r2Url = await uploadToR2(buffer, filename);
 
-        // Update DB with permanent R2 URL (keeping fallbackUrl safe)
         await db
           .update(imageGenerations)
           .set({ imageUrl: r2Url })

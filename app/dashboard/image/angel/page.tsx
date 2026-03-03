@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "AI Image Angle Changer",
     description: "Rotate any static image in 3D space with AI.",
-    // images: ["/og-angle-changer.jpg"],
+    images: ["/og-image.png"],
   },
 };
 

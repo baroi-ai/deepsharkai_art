@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   // Front-load the USP right in the title for Google Search
   title: "DeepShark AI | Extract Layer, Edit & Upscale Images",
   description:
-    "The ultimate AI Image Studio. Extract image layers, edit, and upscale to 4K using elite AI models. Turn flat images into editable 3D layers instantly.",
+    "The ultimate AI Image Studio. Extract image layers, edit, Free caption and upscale to 4K using elite AI models. Turn flat images into editable 3D layers instantly.",
   keywords: [
     // 🚀 Added the Blue Ocean keywords!
     "Image Decomposer",

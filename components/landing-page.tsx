@@ -21,6 +21,9 @@ import ScrollObserver from "@/components/landing-page/scroll-observer";
 import AIModels from "./AIModels";
 import AITools from "./AITools";
 import Footer from "./Footer";
+import LayerExplosionHero from "./LayerExplosionHero";
+import UpscalerScrollHero from "./Upscaler";
+import SkinEnhancerInteractiveHero from "./SkinEnhancer";
 
 const LandingPage = () => {
   return (
@@ -33,6 +36,13 @@ const LandingPage = () => {
 
       {/* ✅ AI Tools Section (DB Connected) */}
       <AITools />
+
+      {/* Layer Explosion Hero */}
+      <LayerExplosionHero />
+
+      <UpscalerScrollHero />
+
+      <SkinEnhancerInteractiveHero />
 
       <AIModels />
 
@@ -47,13 +57,11 @@ const LandingPage = () => {
             <h2 className="text-3xl md:text-4xl font-bold mb-4 md:mb-6">
               Powered by{" "}
               <span className="text-teal-400 drop-shadow-[0_0_8px_rgba(20,184,166,0.5)]">
-                Open & Closed Source
-              </span>{" "}
-              Models
+                Open & Closed Models
+              </span>
             </h2>
             <p className="text-lg text-gray-400">
-              We've integrated the most advanced open & Closed source AI models
-              to give you unparalleled creative freedom.
+              We've integrated the most advanced open & Closed source AI models.
             </p>
           </div>
 
@@ -95,32 +103,6 @@ const LandingPage = () => {
                 glowPosition={feature.glowPosition as any}
               />
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Access/Download Section */}
-      <section id="access" className="py-20 md:py-24 relative">
-        <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-cyan-500/10 to-transparent"></div>
-        <div className="container mx-auto px-4 md:px-6 relative z-10">
-          <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-3xl md:text-4xl font-bold mb-6 reveal">
-              Access Sharky AI{" "}
-              <span className="text-teal-400 drop-shadow-[0_0_8px_rgba(20,184,166,0.5)]">
-                Anywhere
-              </span>
-            </h2>
-            <div className="flex flex-wrap gap-4 justify-center reveal">
-              <Button
-                className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-black font-medium btn-glow px-8 py-3 md:py-4 text-base md:text-lg"
-                asChild
-              >
-                <Link href="/download">
-                  <Download className="mr-2 h-5 w-5" />
-                  Download App
-                </Link>
-              </Button>
-            </div>
           </div>
         </div>
       </section>

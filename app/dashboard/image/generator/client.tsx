@@ -23,6 +23,7 @@ import {
   UploadCloud,
   XCircle,
   Plus,
+  Minus,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
@@ -73,6 +74,33 @@ interface GenerationJob {
 
 const availableModels: AvailableModel[] = [
   {
+    id: "fal-ai/nano-banana-2",
+    name: "Nano Banana 2",
+    iconPath: "/icons/nano-banna.webp",
+    supportsAspectRatio: true,
+    supportsNumImages: {
+      paramNameBackend: "num_images",
+      min: 1,
+      max: 4,
+      default: 1,
+    },
+    supportsImageInput: { paramNameBackend: "image_url" },
+    supportsResolution: true,
+  },
+  {
+    id: "fal-ai/bytedance/seedream/v5/lite/text-to-image",
+    name: "Seedream V5 Lite",
+    iconPath: "/icons/dreminia.webp",
+    supportsAspectRatio: true,
+    supportsNumImages: {
+      paramNameBackend: "num_images",
+      min: 1,
+      max: 4,
+      default: 1,
+    },
+    supportsImageInput: { paramNameBackend: "image_urls" },
+  },
+  {
     id: "fal-ai/flux-2/klein/9b",
     name: "Flux klein 9B",
     iconPath: "/icons/flux.webp",
@@ -83,7 +111,7 @@ const availableModels: AvailableModel[] = [
       max: 4,
       default: 1,
     },
-    supportsImageInput: { paramNameBackend: "image_url" },
+    supportsImageInput: { paramNameBackend: "image_urls" },
     settingsConfig: { negativePrompt: { paramNameBackend: "negative_prompt" } },
   },
   {
@@ -99,6 +127,19 @@ const availableModels: AvailableModel[] = [
     },
     supportsImageInput: { paramNameBackend: "image_url" },
     supportsResolution: true,
+  },
+  {
+    id: "xai/grok-imagine-image",
+    name: "Grok Imagine",
+    iconPath: "/icons/grok.webp",
+    supportsAspectRatio: true,
+    supportsNumImages: {
+      paramNameBackend: "num_images",
+      min: 1,
+      max: 4,
+      default: 1,
+    },
+    supportsImageInput: { paramNameBackend: "image_url" },
   },
   {
     id: "fal-ai/gpt-image-1.5",
@@ -137,19 +178,6 @@ const availableModels: AvailableModel[] = [
       max: 4,
       default: 1,
     },
-    supportsImageInput: { paramNameBackend: "subject_reference_image_url" },
-  },
-  {
-    id: "fal-ai/bytedance/seedream/v4.5/text-to-image",
-    name: "Seedream V4.5",
-    iconPath: "/icons/dreminia.webp",
-    supportsAspectRatio: true,
-    supportsNumImages: {
-      paramNameBackend: "num_images",
-      min: 1,
-      max: 4,
-      default: 1,
-    },
     supportsImageInput: { paramNameBackend: "image_url" },
   },
   {
@@ -166,15 +194,11 @@ const availableModels: AvailableModel[] = [
     supportsImageInput: { paramNameBackend: "image_url" },
   },
   {
-    id: "fal-ai/recraft/v3/text-to-image",
-    name: "Recraft V3",
+    id: "fal-ai/recraft/v4/text-to-image",
+    name: "Recraft V4",
     iconPath: "/icons/recraft.webp",
     supportsAspectRatio: true,
     supportsImageInput: { paramNameBackend: "image_url" },
-    settingsConfig: {
-      negativePrompt: { paramNameBackend: "negative_prompt" },
-      condition: ({ inputImages }) => inputImages.length > 0,
-    },
   },
   {
     id: "fal-ai/luma-photon",
@@ -254,6 +278,31 @@ const ImageGenerationPage = () => {
     [selectedModel],
   );
 
+  // ✅ DYNAMIC ENDPOINT LOGIC: Detects if it's an edit right away
+  const actualEndpoint = useMemo(() => {
+    if (!currentModel) return "";
+    let endpoint = currentModel.id;
+
+    if (inputImages.length > 0) {
+      if (endpoint.includes("flux")) endpoint += "/edit";
+      else if (endpoint.includes("nano-banana")) endpoint += "/edit";
+      else if (endpoint.includes("grok")) endpoint += "/edit";
+      else if (endpoint.includes("ideogram")) endpoint += "/remix";
+      else if (endpoint.includes("z-image")) endpoint += "/image-to-image";
+      else if (endpoint.includes("luma-photon")) endpoint += "/modify";
+      else if (endpoint.includes("minimax")) endpoint += "/subject-reference";
+      else if (endpoint.includes("seedream"))
+        endpoint = endpoint.replace("text-to-image", "edit");
+      else if (endpoint.includes("recraft"))
+        endpoint = endpoint.replace("text-to-image", "image-to-image");
+      else if (endpoint.includes("gpt")) endpoint += "/edit";
+    }
+    return endpoint;
+  }, [currentModel, inputImages.length]);
+
+  // ✅ Dynamically limit Ideogram to 1 image, others to 4
+  const maxAllowedImages = currentModel?.id.includes("ideogram") ? 1 : 4;
+
   // Cleanup effect for Blob URLs to avoid memory leaks
   useEffect(() => {
     return () => {
@@ -290,12 +339,28 @@ const ImageGenerationPage = () => {
     setNegativePrompt("");
   };
 
+  // ✅ DYNAMIC COST: Now uses actualEndpoint instead of base model
+  // ✅ DYNAMIC COST: Now uses actualEndpoint instead of base model
   const calculatedCost = useMemo(() => {
-    if (!currentModel) return 0;
-    const baseCost = getModelCost(currentModel.id);
-    const num = currentModel.supportsNumImages ? Number(numImages) || 1 : 1;
+    if (!actualEndpoint) return 0;
+
+    let baseCost = getModelCost(actualEndpoint);
+
+    // ✅ Use if / else if to ensure only ONE multiplier is applied!
+    if (actualEndpoint.includes("nano-banana-2")) {
+      if (resolution === "2k")
+        baseCost = Math.ceil(baseCost * 1.5); // 1.5x cost
+      else if (resolution === "4k") baseCost = baseCost * 2; // 2x cost
+    } else if (actualEndpoint.includes("nano-banana")) {
+      // This will now only run for nano-banana-pro
+      if (resolution === "2k" || resolution === "4k") {
+        baseCost = baseCost * 2;
+      }
+    }
+
+    const num = currentModel?.supportsNumImages ? Number(numImages) || 1 : 1;
     return baseCost * num;
-  }, [currentModel, numImages]);
+  }, [actualEndpoint, currentModel, numImages, resolution]);
 
   const handleNumImagesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { value } = e.target;
@@ -318,13 +383,28 @@ const ImageGenerationPage = () => {
     setNumImages(currentN);
   };
 
-  // ✅ IMPROVED: Use URL.createObjectURL for instant previews (No FileReader)
+  // Handlers for custom + / - buttons
+  const handleIncrement = () => {
+    if (isLoading || !currentModel?.supportsNumImages) return;
+    const { max } = currentModel.supportsNumImages;
+    setNumImages((prev) => Math.min(Number(prev) + 1, max));
+  };
+
+  const handleDecrement = () => {
+    if (isLoading || !currentModel?.supportsNumImages) return;
+    const { min } = currentModel.supportsNumImages;
+    setNumImages((prev) => Math.max(Number(prev) - 1, min));
+  };
+
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    if (files.length + inputImages.length > 4) {
-      toast.error("Max 4 images allowed.");
+    // ✅ Uses the dynamic limit!
+    if (files.length + inputImages.length > maxAllowedImages) {
+      toast.error(
+        `Max ${maxAllowedImages} image${maxAllowedImages === 1 ? "" : "s"} allowed for this model.`,
+      );
       e.target.value = "";
       return;
     }
@@ -333,7 +413,6 @@ const ImageGenerationPage = () => {
     const newPreviews: string[] = [];
 
     files.forEach((file) => {
-      // Limit file size if needed (e.g. 10MB)
       if (file.size > 10 * 1024 * 1024) {
         toast.error(`File ${file.name} is too large (>10MB)`);
         return;
@@ -348,9 +427,7 @@ const ImageGenerationPage = () => {
   };
 
   const removeImage = (index: number) => {
-    // Revoke the specific URL we are removing
     URL.revokeObjectURL(inputPreviews[index]);
-
     setInputImages((prev) => prev.filter((_, i) => i !== index));
     setInputPreviews((prev) => prev.filter((_, i) => i !== index));
   };
@@ -395,7 +472,8 @@ const ImageGenerationPage = () => {
     setActiveJobs((prev) => [newJob, ...prev]);
 
     try {
-      let endpoint = currentModel.id;
+      const endpoint = actualEndpoint;
+
       let input: any = {
         prompt: prompt,
         num_images: finalNumImages,
@@ -406,41 +484,40 @@ const ImageGenerationPage = () => {
         inputImages.map((file) => fal.storage.upload(file)),
       );
 
-      // --- ENDPOINT SWITCHING ---
-      if (inputImages.length > 0) {
-        if (endpoint.includes("flux")) endpoint += "/edit";
-        else if (endpoint.includes("nano-banana")) endpoint += "/edit";
-        else if (endpoint.includes("ideogram")) endpoint += "/edit";
-        else if (endpoint.includes("z-image")) endpoint += "/image-to-image";
-        else if (endpoint.includes("luma-photon")) endpoint += "/modify";
-        else if (endpoint.includes("minimax")) endpoint += "/subject-reference";
-        else if (endpoint.includes("seedream"))
-          endpoint = endpoint.replace("text-to-image", "edit");
-        else if (endpoint.includes("recraft"))
-          endpoint = endpoint.replace("text-to-image", "image-to-image");
-        else if (endpoint.includes("gpt")) endpoint += "/edit";
-      }
-
       // --- INPUT PARAMETERS ---
       if (currentModel.supportsResolution) {
         input.aspect_ratio = aspectRatio;
         input.resolution = resolution.toUpperCase();
       } else if (endpoint.includes("minimax")) {
         input.aspect_ratio = aspectRatio;
+      } else if (endpoint.includes("minimax") || endpoint.includes("grok")) {
+        // ✅ Grok accepts "16:9" strings natively just like Minimax!
+        input.aspect_ratio = aspectRatio;
       } else if (endpoint.includes("luma")) {
         input.aspect_ratio = aspectRatio;
         if (finalNumImages > 1) input.num_images = 1;
+
+        // ✅ Simplify this! If they uploaded an image, send the strength.
+        if (inputImages.length > 0) {
+          input.strength = strength;
+        }
       } else if (endpoint.includes("gpt")) {
-        let sizeString = "1024x1024";
-        if (aspectRatio === "16:9" || aspectRatio === "4:3")
-          sizeString = "1536x1024";
-        else if (aspectRatio === "9:16") sizeString = "1024x1536";
-        input.image_size = sizeString;
+        if (inputImages.length > 0) {
+          input.image_size = "auto";
+        } else {
+          // ✅ If doing Text-to-Image, use the exact Enum strings GPT requires
+          let sizeString = "1024x1024";
+          if (aspectRatio === "16:9" || aspectRatio === "4:3")
+            sizeString = "1536x1024";
+          else if (aspectRatio === "9:16") sizeString = "1024x1536";
+          input.image_size = sizeString;
+        }
       } else if (
         endpoint.includes("flux") ||
         endpoint.includes("ideogram") ||
         endpoint.includes("seedream") ||
-        endpoint.includes("z-image")
+        endpoint.includes("z-image") ||
+        endpoint.includes("recraft")
       ) {
         let sizeEnum = "square_hd";
         if (aspectRatio === "16:9") sizeEnum = "landscape_16_9";
@@ -474,7 +551,7 @@ const ImageGenerationPage = () => {
         }
       }
 
-      // ✅ 2. CALL CUSTOM API ROUTE
+      // 2. CALL CUSTOM API ROUTE
       const response = await fetch("/api/fal/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -495,7 +572,6 @@ const ImageGenerationPage = () => {
         throw new Error(data.error);
       }
 
-      // The API now returns { imageUrls: [...] }
       const generatedUrls = data.imageUrls;
 
       setActiveJobs((prev) =>
@@ -552,10 +628,14 @@ const ImageGenerationPage = () => {
     return !hasSufficientInput;
   }, [isLoading, currentModel, prompt, inputImages]);
 
+  // ✅ Hide aspect ratio for Luma when an image is uploaded
   const showAspectRatioSelector = useMemo(() => {
     if (!currentModel?.supportsAspectRatio) return false;
-    if (currentModel.id.includes("luma") && inputImages.length > 0)
+
+    if (currentModel.id.includes("luma") && inputImages.length > 0) {
       return false;
+    }
+
     return true;
   }, [currentModel, inputImages]);
 
@@ -727,23 +807,40 @@ const ImageGenerationPage = () => {
             </div>
           )}
 
-          {/* Num Images Input */}
+          {/* Custom Num Images Stepper */}
           {currentModel?.supportsNumImages && (
-            <div className="flex items-center gap-1 text-gray-400">
-              <label htmlFor="numImagesInput" className="text-xs">
-                Images:
-              </label>
-              <input
-                id="numImagesInput"
-                type="number"
-                min={currentModel.supportsNumImages.min}
-                max={currentModel.supportsNumImages.max}
-                value={numImages}
-                onChange={handleNumImagesChange}
-                onBlur={handleNumImagesBlur}
-                disabled={isLoading}
-                className="w-12 bg-transparent border-gray-600 rounded px-1 py-0.5 text-center text-xs"
-              />
+            <div className="flex items-center gap-2 text-gray-400">
+              <label className="text-xs">Images:</label>
+
+              <div className="flex items-center bg-transparent border border-gray-600 rounded overflow-hidden">
+                <button
+                  type="button"
+                  onClick={handleDecrement}
+                  disabled={
+                    isLoading ||
+                    Number(numImages) <= currentModel.supportsNumImages.min
+                  }
+                  className="px-2 py-1 bg-gray-800/30 hover:bg-gray-700 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Minus className="w-3 h-3" />
+                </button>
+
+                <span className="w-6 text-center text-xs text-gray-200 font-medium select-none">
+                  {numImages}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={handleIncrement}
+                  disabled={
+                    isLoading ||
+                    Number(numImages) >= currentModel.supportsNumImages.max
+                  }
+                  className="px-2 py-1 bg-gray-800/30 hover:bg-gray-700 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -789,7 +886,8 @@ const ImageGenerationPage = () => {
               </div>
             ))}
 
-            {inputPreviews.length < 4 && (
+            {/* ✅ Updated to use dynamic limit */}
+            {inputPreviews.length < maxAllowedImages && (
               <Button
                 variant="outline"
                 className="w-16 h-16 rounded-md border-dashed border-gray-700 bg-gray-800/30 hover:bg-gray-800 flex-shrink-0 flex items-center justify-center p-0"
@@ -814,7 +912,8 @@ const ImageGenerationPage = () => {
                 multiple
                 onChange={handleImageFileChange}
                 className="hidden"
-                disabled={isLoading}
+                // ✅ Disable the input if the limit is reached
+                disabled={isLoading || inputPreviews.length >= maxAllowedImages}
               />
               <Label
                 htmlFor="source-image-upload-genpage"
@@ -826,8 +925,9 @@ const ImageGenerationPage = () => {
                       ? "border-cyan-500 text-cyan-500"
                       : ""
                   } ${
-                    inputPreviews.length >= 4
-                      ? "opacity-50 cursor-not-allowed"
+                    // ✅ Apply the disabled styling if limit is reached
+                    inputPreviews.length >= maxAllowedImages
+                      ? "opacity-50 cursor-not-allowed pointer-events-none"
                       : ""
                   }`,
                 })}

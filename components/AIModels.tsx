@@ -1,7 +1,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, Package, Sparkles } from "lucide-react";
 import { db } from "../app/db";
 import { aiModels } from "../app/db/schema";
 import { desc, eq } from "drizzle-orm";
@@ -37,11 +37,14 @@ const AIModels = async () => {
 
       <div className="container mx-auto px-4 md:px-6 relative z-10">
         <div className="max-w-xl mx-auto text-center mb-12">
-          <span className="mb-4 inline-block border border-teal-400/30 text-teal-400 px-3 py-1 text-sm rounded-md">
-            Featured AI Models
+          <span className="mb-4 inline-flex items-center gap-2 border border-teal-400/30 text-teal-400 px-3 py-1 text-sm rounded-md bg-teal-500/10">
+            <Package className="w-4 h-4" /> Featured AI Models
           </span>
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            Explore latest AI Models
+          <h2 className="text-3xl md:text-5xl font-bold mb-4 text-white">
+            Explore{" "}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-cyan-400">
+              latest AI Models
+            </span>
           </h2>
           <p className="text-gray-400 text-lg">
             Discover ready-to-use models for images, video, and more.

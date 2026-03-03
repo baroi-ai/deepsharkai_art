@@ -14,7 +14,7 @@ const dancingScript = Dancing_Script({ subsets: ["latin"] });
 // Video Sources
 const VIDEO_BG = {
   desktop: "/videos/hero-background.webm",
-  mobile: "/videos/hero-background-mobile.webm",
+  mobile: "/videos/bg-video.mp4",
 };
 
 export default function DashboardLayout({

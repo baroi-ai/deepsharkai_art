@@ -53,12 +53,9 @@ const CompareSlider = ({
   enhanced: string;
 }) => {
   const [sliderPosition, setSliderPosition] = useState(50);
-  const [containerWidth, setContainerWidth] = useState(0); // ✅ Store width in state
+  const [containerWidth, setContainerWidth] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // ✅ 1. Measure the container width constantly
-  // This ensures the inner image is ALWAYS the exact width of the parent,
-  // preventing it from "squishing" or "zooming" when the slider moves.
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -89,14 +86,14 @@ const CompareSlider = ({
       onMouseMove={handleMouseMove}
       onTouchMove={handleMouseMove}
     >
-      {/* 2. SKELETON (Invisible) - Sets the height/aspect ratio */}
+      {/* SKELETON */}
       <img
         src={original}
         alt="Reference"
         className="block max-h-[70vh] w-auto h-auto opacity-0 pointer-events-none"
       />
 
-      {/* 3. BACKGROUND (Enhanced/Remote) - Static */}
+      {/* BACKGROUND (Enhanced/Remote) */}
       <div className="absolute inset-0 w-full h-full">
         <Image
           src={enhanced}
@@ -108,15 +105,11 @@ const CompareSlider = ({
         />
       </div>
 
-      {/* 4. FOREGROUND (Original) - THE SLIDING WINDOW */}
+      {/* FOREGROUND (Original) */}
       <div
         className="absolute inset-0 h-full overflow-hidden border-r-2 border-white/50 z-10"
         style={{ width: `${sliderPosition}%` }}
       >
-        {/* ✅ CRITICAL FIX:
-           We force this inner container to be the width of the PARENT (containerWidth).
-           This makes the image static while the window (parent div) clips it.
-        */}
         <div
           className="absolute top-0 left-0 h-full"
           style={{ width: containerWidth ? `${containerWidth}px` : "100%" }}
@@ -140,7 +133,7 @@ const CompareSlider = ({
         </div>
       </div>
 
-      {/* 5. SLIDER HANDLE */}
+      {/* SLIDER HANDLE */}
       <div
         className="absolute top-0 bottom-0 w-1 bg-white/80 cursor-ew-resize shadow-[0_0_15px_rgba(0,0,0,0.5)] flex items-center justify-center z-20"
         style={{ left: `${sliderPosition}%` }}
@@ -184,6 +177,7 @@ interface GenerationJob {
   originalUrl?: string;
 }
 
+// ✅ Removed Clarity Upscaler
 const availableModels: AvailableModel[] = [
   {
     id: "fal-ai/nano-banana-pro/edit",
@@ -198,13 +192,6 @@ const availableModels: AvailableModel[] = [
     iconPath: "/icons/Topaz-ai.webp",
     supportsUpscalingLevels: true,
     supportsImageInput: { paramNameBackend: "image" },
-  },
-  {
-    id: "fal-ai/clarity-upscaler",
-    name: "Clarity AI Upscaler",
-    iconPath: "/icons/clarityai.webp",
-    supportsUpscalingLevels: true,
-    supportsImageInput: { paramNameBackend: "image_urls" },
   },
 ];
 
@@ -260,6 +247,18 @@ const ImageUpscalerPage = () => {
     return true;
   }, [currentModel]);
 
+  // ✅ DYNAMIC COST CALCULATION
+  const calculatedCost = useMemo(() => {
+    const currentUpscaleSetting =
+      upscaleLevels.find((r) => r.id === upscaleLevel) || upscaleLevels[0];
+    const is4K = currentUpscaleSetting.value >= 4;
+
+    if (selectedModel === "fal-ai/nano-banana-pro/edit") return is4K ? 30 : 15;
+    if (selectedModel === "fal-ai/topaz/upscale/image") return is4K ? 12 : 8;
+
+    return 10; // Fallback
+  }, [selectedModel, upscaleLevel]);
+
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -289,7 +288,7 @@ const ImageUpscalerPage = () => {
     }
 
     setIsLoading(true);
-    toast.info(`Upscaling... (Cost: 2 coins)`);
+    toast.info(`Upscaling... (Cost: ${calculatedCost} coins)`);
 
     const newJobId = `job-${Date.now()}`;
     const currentUpscaleSetting =
@@ -437,7 +436,6 @@ const ImageUpscalerPage = () => {
                 }
                 if (job.status === "completed") {
                   return job.urls.map((imgSrc, index) => (
-                    // Container
                     <div
                       key={`${job.id}-${index}`}
                       className="relative group w-fit h-auto rounded-lg overflow-hidden shadow-2xl flex justify-center"
@@ -608,6 +606,7 @@ const ImageUpscalerPage = () => {
               className="flex-grow bg-gray-900/30 border border-gray-800 rounded-lg resize-none text-base text-gray-500 pl-4 pr-32 py-3.5 self-center min-h-[54px] cursor-not-allowed select-none"
             />
             <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center">
+              {/* ✅ DYNAMIC GENERATE BUTTON UI */}
               <Button
                 onClick={handleGenerate}
                 disabled={isGenerateDisabled}
@@ -622,7 +621,7 @@ const ImageUpscalerPage = () => {
                 ) : (
                   <>
                     <span className="text-xs font-semibold whitespace-nowrap">
-                      2
+                      {isAuthenticated ? calculatedCost : "Upscale"}
                     </span>
                     <Coins className="w-3.5 h-3.5" />
                   </>

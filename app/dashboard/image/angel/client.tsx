@@ -281,7 +281,7 @@ const ImageAngelChangerPage = () => {
     if (!sourceImageFile) return toast.error("Please upload an image.");
 
     setIsLoading(true);
-    toast.info(`Transforming... (Cost: 4 coins)`);
+    toast.info(`Transforming... (Cost: 6 coins)`);
 
     const newJobId = `job-${Date.now()}`;
     setActiveJobs([
@@ -493,7 +493,7 @@ const ImageAngelChangerPage = () => {
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <>
-                      <span className="whitespcae-nowrap">4</span>
+                      <span className="whitespcae-nowrap">6</span>
                       <Coins className="w-3.5 h-3.5" />
                     </>
                   )}
