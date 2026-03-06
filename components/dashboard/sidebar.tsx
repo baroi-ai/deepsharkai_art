@@ -20,7 +20,7 @@ import { AuthModal } from "@/components/AuthModal";
 
 const mainNavItems = [
   { name: "Home", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Layer", href: "/dashboard/image/decompose", icon: Layers },
+  { name: "Layer", href: "/dashboard/image/layers", icon: Layers },
   { name: "Image", href: "/dashboard/image/generator", icon: ImageIcon },
   { name: "Edit", href: "/dashboard/image/edit", icon: ImagePlus },
   { name: "More", href: "/dashboard/tools", icon: Dices },

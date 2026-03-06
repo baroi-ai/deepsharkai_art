@@ -1,19 +1,9 @@
 import { Metadata } from "next";
-import dynamic from "next/dynamic";
-import { Loader2 } from "lucide-react";
+import SkinEnhancerClient from "./client";
 
-// ✅ FIX: Removed `ssr: false`.
-// The `loading` component will still appear instantly while the code downloads.
-const SkinEnhancerClient = dynamic(() => import("./client"), {
-  loading: () => (
-    <div className="flex h-[80vh] items-center justify-center text-teal-500">
-      <div className="flex flex-col items-center gap-4">
-        <Loader2 className="h-10 w-10 animate-spin" />
-        <p className="text-gray-400 text-sm animate-pulse">Loading Editor...</p>
-      </div>
-    </div>
-  ),
-});
+// ✅ THE MAGIC BULLET: This tells Next.js NOT to pre-render this private dashboard page.
+// It instantly fixes the useSearchParams error without needing Suspense or ssr: false!
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://deepsharkai.art"),

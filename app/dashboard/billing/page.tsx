@@ -1,9 +1,13 @@
 import { Metadata } from "next";
-import dynamic from "next/dynamic";
+// ✅ 1. Rename import to avoid the TypeScript naming conflict
+import nextDynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 
-// ✅ Optimized Dynamic Import
-const BillingPageClient = dynamic(() => import("./client"), {
+// ✅ 2. THE MAGIC BULLET: Skip static rendering to fix the useSearchParams error
+export const dynamic = "force-dynamic";
+
+// ✅ Use nextDynamic here
+const BillingPageClient = nextDynamic(() => import("./client"), {
   loading: () => (
     <div className="flex h-[80vh] items-center justify-center text-teal-500">
       <div className="flex flex-col items-center gap-4">

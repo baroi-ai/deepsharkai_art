@@ -1,6 +1,8 @@
 import { Metadata } from "next";
 import ContactPageClient from "./client"; // Import your renamed client component
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Contact Us | Support & Inquiries - DeepShark AI",
   description:

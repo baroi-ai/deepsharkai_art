@@ -16,7 +16,9 @@ const nextConfig: NextConfig = {
           },
           {
             key: "Cross-Origin-Embedder-Policy",
-            value: "require-corp",
+            // ✅ FIX: Changed from "require-corp" to "credentialless"
+            // This lets FFMPEG run fast locally, while allowing external images to load!
+            value: "credentialless",
           },
         ],
       },

@@ -2,6 +2,9 @@ import { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
+// ✅ THE MAGIC BULLET
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Terms and Conditions | DeepShark AI",
   description:
@@ -21,7 +24,6 @@ export default function TermsPage() {
           <h1 className="text-4xl md:text-5xl font-bold mb-6 text-white text-center">
             Terms and Conditions
           </h1>
-          {/* ✅ UPDATED: Date to match your other pages */}
           <p className="text-center text-gray-400 mb-8">
             Last Updated: January 23, 2026
           </p>
@@ -57,7 +59,6 @@ export default function TermsPage() {
             <h2>Contact Us</h2>
             <p>
               If you have any questions about these Terms, please contact us at:{" "}
-              {/* ✅ UPDATED: Email domain to match deepsharkai.art */}
               <a
                 href="mailto:support@deepsharkai.art"
                 className="text-teal-400 hover:underline"

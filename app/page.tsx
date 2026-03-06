@@ -1,13 +1,14 @@
 import { Metadata } from "next";
 import LandingPage from "@/components/landing-page";
 
+// ✅ THE MAGIC BULLET
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
-  // Front-load the USP right in the title for Google Search
   title: "DeepShark AI | Extract Layer, Edit & Upscale Images",
   description:
     "The ultimate AI Image Studio. Extract image layers, edit, Free caption and upscale to 4K using elite AI models. Turn flat images into editable 3D layers instantly.",
   keywords: [
-    // 🚀 Added the Blue Ocean keywords!
     "Image Decomposer",
     "Extract Image Layers",
     "Split Image into Layers",

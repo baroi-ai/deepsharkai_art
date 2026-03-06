@@ -10,9 +10,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Mail, Instagram, Copy, Check, ArrowRight } from "lucide-react";
+import {
+  Mail,
+  Instagram,
+  Copy,
+  Check,
+  ArrowRight,
+  MessageCircle,
+} from "lucide-react";
 import Link from "next/link";
-import { toast } from "sonner"; // Assuming you use Sonner or similar for toasts
+import { toast } from "sonner";
 
 const ContactPage = () => {
   const [copied, setCopied] = useState(false);
@@ -46,7 +53,8 @@ const ContactPage = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl">
+        {/* 🚀 Changed to a 3-column grid and widened the max-width */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-6xl">
           {/* --- 1. Email Support Card --- */}
           <Card className="bg-slate-900/50 border border-white/10 hover:border-teal-500/50 transition-all group backdrop-blur-md">
             <CardHeader className="space-y-4">
@@ -58,8 +66,7 @@ const ContactPage = () => {
                   Email Support
                 </CardTitle>
                 <CardDescription className="text-gray-400 mb-6">
-                  For account issues, billing questions, or technical support.
-                  We usually reply within 24 hours.
+                  Account issues, billing issues or technical support.
                 </CardDescription>
 
                 {/* Email Display & Copy Button */}
@@ -92,7 +99,40 @@ const ContactPage = () => {
             </CardHeader>
           </Card>
 
-          {/* --- 2. Social / Instagram Card --- */}
+          {/* --- 2. Discord Community Card --- */}
+          <Card className="bg-slate-900/50 border border-white/10 hover:border-indigo-500/50 transition-all group backdrop-blur-md">
+            <CardHeader className="space-y-4">
+              <div className="h-12 w-12 bg-indigo-500/10 rounded-lg flex items-center justify-center group-hover:bg-indigo-500/20 transition-colors">
+                <MessageCircle className="h-6 w-6 text-indigo-400" />
+              </div>
+              <div>
+                <CardTitle className="text-xl text-white mb-2">
+                  Discord Community
+                </CardTitle>
+                <CardDescription className="text-gray-400 mb-6">
+                  Join the creator hub! Request features, report bugs, share
+                  prompts, support and many more.
+                </CardDescription>
+
+                <div className="flex items-center gap-2 p-3 bg-black/40 rounded-md border border-white/5 opacity-0 pointer-events-none">
+                  {/* Spacer to perfectly align heights with the Email card */}
+                  <span className="text-transparent font-mono text-sm">
+                    Placeholder
+                  </span>
+                </div>
+
+                <div className="mt-4">
+                  <Link href="https://discord.gg/ysXMkZbPBN" target="_blank">
+                    <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white border-0">
+                      Join Server <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </CardHeader>
+          </Card>
+
+          {/* --- 3. Social / Instagram Card --- */}
           <Card className="bg-slate-900/50 border border-white/10 hover:border-pink-500/50 transition-all group backdrop-blur-md">
             <CardHeader className="space-y-4">
               <div className="h-12 w-12 bg-pink-500/10 rounded-lg flex items-center justify-center group-hover:bg-pink-500/20 transition-colors">
@@ -116,7 +156,7 @@ const ContactPage = () => {
 
                 <div className="mt-4">
                   <Link
-                    href="https://www.instagram.com/deepsharkai.art/"
+                    href="https://www.instagram.com/baroi.ai/"
                     target="_blank"
                   >
                     <Button className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white border-0">

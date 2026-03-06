@@ -1,8 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
-import Image from "next/image"; // ✅ 1. Import Next.js Image
+import Image from "next/image";
 import {
   Menu,
   Coins,
@@ -36,6 +36,9 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
   const { data: session } = useSession();
   const user = session?.user;
 
+  // ✅ NEW: State to track if the Google image failed to load
+  const [imageError, setImageError] = useState(false);
+
   // @ts-ignore
   const userCoins = user?.credits || 0;
 
@@ -49,7 +52,7 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
             size="icon"
             className="md:hidden text-gray-400 hover:text-white hover:bg-white/10"
             onClick={toggleSidebar}
-            aria-label="Toggle Sidebar Menu" // ✅ Fix: Accessibility Name
+            aria-label="Toggle Sidebar Menu"
           >
             <Menu className="h-6 w-6" />
           </Button>
@@ -57,15 +60,14 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
           <Link
             href="/dashboard"
             className="flex items-center gap-2"
-            aria-label="Go to Dashboard Home" // ✅ Fix: Link Description
+            aria-label="Go to Dashboard Home"
           >
-            {/* ✅ Fix: Optimized Logo with Priority (LCP) */}
             <Image
               src="/logo.webp"
               alt="DeepShark AI Logo"
               width={40}
               height={40}
-              priority={true} // Critical for top-of-page elements
+              priority={true}
               className="h-8 w-auto md:h-10 drop-shadow-[0_0_5px_rgba(20,184,166,0.5)] object-contain"
             />
             <span className="hidden text-teal-500 sm:inline-block text-lg md:text-xl font-bold drop-shadow-[0_0_5px_rgba(20,184,166,0.5)]">
@@ -85,7 +87,7 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
               variant="ghost"
               size="icon"
               className="text-gray-400 hover:text-white hover:bg-white/10"
-              aria-label="Download App" // ✅ Fix: Accessible Name
+              aria-label="Download App"
             >
               <Download className="h-5 w-5" />
             </Button>
@@ -98,7 +100,7 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
               size="sm"
               className="group flex items-center gap-1.5 border-teal-500/30 bg-teal-900/10 hover:bg-teal-900/20 text-teal-100 rounded-full h-8"
               asChild
-              aria-label={`View Credits: ${userCoins} available`} // ✅ Fix
+              aria-label={`View Credits: ${userCoins} available`}
             >
               <Link href="/dashboard/billing">
                 <Coins className="h-4 w-4 text-teal-400" />
@@ -113,7 +115,7 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
                   variant="outline"
                   size="sm"
                   className="group flex items-center gap-1.5 border-teal-500/30 bg-teal-900/10 hover:bg-teal-900/20 text-teal-100 rounded-full h-8 cursor-pointer"
-                  aria-label="Purchase Credits" // ✅ Fix
+                  aria-label="Purchase Credits"
                 >
                   <Coins className="h-4 w-4 text-teal-400" />
                   <span className="text-sm font-medium">0</span>
@@ -130,14 +132,18 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
                 <Button
                   variant="ghost"
                   className="relative h-9 w-9 rounded-full p-0 ring-2 ring-transparent hover:ring-teal-500/50 transition-all"
-                  aria-label="Open User Menu" // ✅ Fix: Accessible Name
+                  aria-label="Open User Menu"
                 >
                   <Avatar className="h-full w-full border border-white/10">
-                    <AvatarImage
-                      src={user.image || ""}
-                      alt={user.name || "User Avatar"}
-                      crossOrigin="anonymous"
-                    />
+                    {/* ✅ FIX: Added onError to hide the image and trigger the fallback if Google rate limits us */}
+                    {!imageError && (
+                      <AvatarImage
+                        src={user.image || ""}
+                        alt={user.name || "User Avatar"}
+                        crossOrigin="anonymous"
+                        onError={() => setImageError(true)}
+                      />
+                    )}
                     <AvatarFallback className="bg-slate-800 text-teal-400 font-bold">
                       {user.name?.charAt(0).toUpperCase() || "U"}
                     </AvatarFallback>
@@ -206,7 +212,7 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
                 <Button
                   variant="ghost"
                   className="text-gray-300 hover:text-teal-400 hover:bg-white/5"
-                  aria-label="Login to Account" // ✅ Fix
+                  aria-label="Login to Account"
                 >
                   <LogIn className="h-5 w-5 mr-2" /> Login
                 </Button>

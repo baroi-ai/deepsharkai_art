@@ -26,7 +26,7 @@ const navItems = [
 
 const createOptions = [
   { href: "/dashboard/image/generator", label: "Image", icon: ImageIcon },
-  { href: "/dashboard/image/decompose", label: "Layer", icon: Layers },
+  { href: "/dashboard/image/layers", label: "Layer", icon: Layers },
   { href: "/dashboard/image/edit", label: "Edit", icon: ImagePlus },
   { href: "/dashboard/tools", label: "More", icon: Dices },
 ];

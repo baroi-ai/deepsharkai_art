@@ -1,9 +1,11 @@
 import { Metadata } from "next";
-import dynamic from "next/dynamic";
+import nextDynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 // ✅ Optimized Dynamic Import
-const MediaToTextClient = dynamic(() => import("./client"), {
+const MediaToTextClient = nextDynamic(() => import("./client"), {
   loading: () => (
     <div className="flex h-[calc(100vh-80px)] items-center justify-center text-teal-500">
       <div className="flex flex-col items-center gap-4">

@@ -107,8 +107,7 @@ export default function ModelsPage() {
           Browse AI Models
         </h1>
         <p className="text-gray-400 max-w-2xl text-sm md:text-base">
-          Explore the engine room of creation. Select from the world's best
-          open-source and proprietary AI models.
+          Select from the world's best open-source and proprietary AI models.
         </p>
 
         <div className="relative w-full max-w-lg mt-4">

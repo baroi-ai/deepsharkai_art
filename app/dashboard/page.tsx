@@ -1,6 +1,10 @@
 import { Metadata } from "next";
 import DashboardPageClient from "./client";
 
+// ✅ THE MAGIC BULLET: Tells Next.js to render the dashboard dynamically
+// and stops the useSearchParams build crash instantly.
+export const dynamic = "force-dynamic";
+
 // Keep this so Google still indexes the page description
 export const metadata: Metadata = {
   metadataBase: new URL("https://deepsharkai.art"),

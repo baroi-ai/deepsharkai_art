@@ -1,9 +1,13 @@
 import { Metadata } from "next";
-import dynamic from "next/dynamic";
+// ✅ FIX: Rename the import to `nextDynamic` to avoid the naming conflict!
+import nextDynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 
-// ✅ Optimized Dynamic Import
-const ImageUpscalerPage = dynamic(() => import("./client"), {
+// ✅ THE MAGIC BULLET (Leaves the Next.js route config perfectly intact)
+export const dynamic = "force-dynamic";
+
+// ✅ Use `nextDynamic` here instead
+const ImageUpscalerPage = nextDynamic(() => import("./client"), {
   loading: () => (
     <div className="flex h-[80vh] items-center justify-center text-teal-500">
       <div className="flex flex-col items-center gap-4">

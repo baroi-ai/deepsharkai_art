@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { Youtube, Linkedin, Twitter, Instagram } from "lucide-react";
+import { Youtube, MessageCircle, Twitter, Instagram } from "lucide-react";
 
 const Footer = () => {
   const socialLinks = [
@@ -17,9 +17,9 @@ const Footer = () => {
       label: "YouTube",
     },
     {
-      Icon: Linkedin,
-      href: "https://www.linkedin.com/in/subhodeepbaroi/",
-      label: "LinkedIn",
+      Icon: MessageCircle,
+      href: "https://discord.gg/ysXMkZbPBN",
+      label: "Discord",
     },
     { Icon: Twitter, href: "https://x.com/baroi_ai", label: "Twitter/X" },
   ];

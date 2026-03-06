@@ -28,7 +28,6 @@ import {
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 
-// 🌟 NEW: Safe Memory Limits
 const MAX_FILE_SIZE_DESKTOP_MB = 100;
 const MAX_FILE_SIZE_MOBILE_MB = 60;
 const MAX_DURATION_SEC = 60;
@@ -46,6 +45,9 @@ interface ChunkStyle {
   animation?: string;
   glow?: number;
   sync?: number;
+  strokeEnabled?: boolean;
+  strokeColor?: string;
+  strokeWidth?: number;
 }
 
 interface TranscriptChunk {
@@ -54,7 +56,6 @@ interface TranscriptChunk {
   style?: ChunkStyle;
 }
 
-// 🌟 NEW: SRT Time Formatter Helper
 const formatSrtTime = (timeInSeconds: number) => {
   const pad = (num: number, size: number) => String(num).padStart(size, "0");
   const hours = Math.floor(timeInSeconds / 3600);
@@ -65,10 +66,9 @@ const formatSrtTime = (timeInSeconds: number) => {
 };
 
 export default function VideoCaptionerPage() {
-  // --- CORE STATE ---
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaSrc, setMediaSrc] = useState<string | null>(null);
-  const [videoAspectRatio, setVideoAspectRatio] = useState<number>(9 / 16); // 🌟 DYNAMIC ASPECT RATIO STATE
+  const [videoAspectRatio, setVideoAspectRatio] = useState<number>(9 / 16);
   const [transcript, setTranscript] = useState<{
     text: string;
     chunks?: TranscriptChunk[];
@@ -76,40 +76,37 @@ export default function VideoCaptionerPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState<string>("");
 
-  // --- TRANSCRIPT EDITING & SELECTION STATE ---
   const [isEditing, setIsEditing] = useState(false);
   const [selectedChunkIndex, setSelectedChunkIndex] = useState<number | null>(
     null,
   );
-
-  // --- EXPORT STATE ---
   const [isExporting, setIsExporting] = useState(false);
 
-  // --- VIDEO PLAYER STATE ---
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
 
-  // --- GLOBAL STYLE LAB STATE ---
   const [layout, setLayout] = useState("hormozi");
-  const [fontStyle, setFontStyle] = useState("apple-premium");
-  const [animation, setAnimation] = useState("spring");
+  const [fontStyle, setFontStyle] = useState("viral-italic");
+  const [animation, setAnimation] = useState("pop");
   const [posX, setPosX] = useState(0);
   const [posY, setPosY] = useState(71);
   const [size, setSize] = useState(30);
   const [rotation, setRotation] = useState(0);
   const [sync, setSync] = useState(0.15);
-  const [glow, setGlow] = useState(20);
+  const [glow, setGlow] = useState(0);
   const [mainColor, setMainColor] = useState("#FFFFFF");
-  const [heroColor, setHeroColor] = useState("#FFFFFF");
-  const [glowColor, setGlowColor] = useState("#FFFFFF");
+  const [heroColor, setHeroColor] = useState("#39FF14");
+  const [glowColor, setGlowColor] = useState("#000000");
+  const [strokeEnabled, setStrokeEnabled] = useState(true);
+  const [strokeColor, setStrokeColor] = useState("#000000");
+  const [strokeWidth, setStrokeWidth] = useState(12);
 
   const workerRef = useRef<Worker | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
 
-  // --- WORKER LIFECYCLE ---
   useEffect(() => {
     return () => workerRef.current?.terminate();
   }, []);
@@ -139,7 +136,6 @@ export default function VideoCaptionerPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  // --- 🌟 NEW: SRT EXPORT HANDLER 🌟 ---
   const handleDownloadSRT = () => {
     if (!transcript || !transcript.chunks) return;
 
@@ -163,7 +159,6 @@ export default function VideoCaptionerPage() {
     toast.success("SRT file downloaded!");
   };
 
-  // --- 🌟 LOCAL FULL-RENDER EXPORT ENGINE 🌟 ---
   const handleExport = async () => {
     if (!videoRef.current || !transcript || !transcript.chunks) return;
 
@@ -233,8 +228,8 @@ export default function VideoCaptionerPage() {
     await video.play();
     recorder.start();
 
-    const domWidth = video.getBoundingClientRect().width || 340;
-    const exportScale = canvas.width / domWidth;
+    const domRect = video.getBoundingClientRect();
+    const exportScale = canvas.width / (domRect.width || 340);
 
     const easeOutBack = (t: number) => {
       const c1 = 1.70158;
@@ -281,6 +276,10 @@ export default function VideoCaptionerPage() {
           const lAnimation = chunk.style?.animation ?? animation;
           const lFontStyle = chunk.style?.fontStyle ?? fontStyle;
 
+          const lStrokeEnabled = chunk.style?.strokeEnabled ?? strokeEnabled;
+          const lStrokeColor = chunk.style?.strokeColor ?? strokeColor;
+          const lStrokeWidth = chunk.style?.strokeWidth ?? strokeWidth;
+
           const start = chunk.timestamp[0];
           const end =
             chunk.timestamp[1] !== null ? chunk.timestamp[1] : start + 2;
@@ -288,14 +287,16 @@ export default function VideoCaptionerPage() {
 
           let fontFace = "sans-serif";
           let isUppercase = true;
-          let hasStroke = false;
+          let isItalic = false;
 
           if (lFontStyle === "apple-premium") {
             fontFace = "-apple-system, system-ui, sans-serif";
             isUppercase = false;
           } else if (lFontStyle === "viral-impact") {
             fontFace = "Impact, sans-serif";
-            hasStroke = true;
+          } else if (lFontStyle === "viral-italic") {
+            fontFace = "'Montserrat', sans-serif";
+            isItalic = true;
           } else if (lFontStyle === "cinematic") {
             fontFace = "Montserrat, sans-serif";
           } else if (lFontStyle === "futura-bold") {
@@ -305,11 +306,11 @@ export default function VideoCaptionerPage() {
             isUppercase = false;
           } else if (lFontStyle === "gaming-bangers") {
             fontFace = "'Arial Black', sans-serif";
-            hasStroke = true;
           } else if (lFontStyle === "comic-quirky") {
             fontFace = "'Comic Sans MS', sans-serif";
             isUppercase = false;
-            hasStroke = true;
+          } else if (lFontStyle === "komika-axis") {
+            fontFace = "'Luckiest Guy', cursive";
           }
 
           const baseFontSize = lSize * exportScale;
@@ -369,65 +370,52 @@ export default function VideoCaptionerPage() {
             ctx.scale(anim.scale * sizeScale, anim.scale * sizeScale);
             ctx.globalAlpha = anim.opacity;
 
+            const fontStylePrefix = isItalic ? "italic " : "";
             const fontWeight = isHero
               ? "900"
               : lFontStyle === "cinematic"
                 ? "500"
                 : "700";
-            ctx.font = `${fontWeight} ${baseFontSize}px ${fontFace}`;
+            ctx.font = `${fontStylePrefix}${fontWeight} ${baseFontSize}px ${fontFace}`;
 
             if (isHero) {
               ctx.shadowColor = lGlowColor;
               ctx.shadowBlur = lGlow * exportScale;
               ctx.shadowOffsetX = 0;
               ctx.shadowOffsetY = 0;
-              ctx.fillStyle = lHeroColor;
-              ctx.fillText(tText, 0, 0);
             } else {
               ctx.shadowColor = "rgba(0,0,0,0.8)";
               ctx.shadowBlur = 3 * exportScale;
               ctx.shadowOffsetX = 1 * exportScale;
               ctx.shadowOffsetY = 1 * exportScale;
-              ctx.fillStyle = lMainColor;
-              ctx.fillText(tText, 0, 0);
-            }
-
-            ctx.shadowBlur = 0;
-            ctx.shadowOffsetX = 0;
-            ctx.shadowOffsetY = 0;
-
-            if (
-              isHero &&
-              (lFontStyle === "viral-impact" || lFontStyle === "gaming-bangers")
-            ) {
-              ctx.fillStyle = "black";
-              const offset =
-                baseFontSize * (lFontStyle === "viral-impact" ? 0.08 : 0.1);
-              ctx.fillText(tText, offset, offset);
-            }
-
-            if (isHero && hasStroke) {
-              ctx.lineWidth =
-                baseFontSize * (lFontStyle === "viral-impact" ? 0.06 : 0.08);
-              ctx.strokeStyle = "black";
-              ctx.lineJoin = "round";
-              ctx.miterLimit = 2;
-              ctx.strokeText(tText, 0, 0);
             }
 
             ctx.fillStyle = isHero ? lHeroColor : lMainColor;
             ctx.fillText(tText, 0, 0);
 
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+
+            if (lStrokeEnabled) {
+              ctx.lineWidth = baseFontSize * (lStrokeWidth / 100);
+              ctx.strokeStyle = lStrokeColor;
+              ctx.lineJoin = "round";
+              ctx.miterLimit = 2;
+              ctx.strokeText(tText, 0, 0);
+            }
+
             ctx.restore();
           };
 
           const measureTxt = (txt: string, isHero: boolean) => {
+            const fontStylePrefix = isItalic ? "italic " : "";
             const fontWeight = isHero
               ? "900"
               : lFontStyle === "cinematic"
                 ? "500"
                 : "700";
-            ctx.font = `${fontWeight} ${baseFontSize}px ${fontFace}`;
+            ctx.font = `${fontStylePrefix}${fontWeight} ${baseFontSize}px ${fontFace}`;
             return ctx.measureText(txt).width;
           };
 
@@ -444,18 +432,21 @@ export default function VideoCaptionerPage() {
             } else if (words.length === 2) {
               topWords = [words[0]];
               midWord = words[1];
-            } else if (words.length === 3) {
+            } // ✅ FIXED
+            else if (words.length === 3) {
               topWords = [words[0], words[1]];
               midWord = words[2];
-            } else if (words.length === 4) {
+            } // ✅ FIXED
+            else if (words.length === 4) {
               topWords = [words[0], words[1]];
               midWord = words[2];
               botWords = [words[3]];
-            } else {
+            } // ✅ FIXED
+            else {
               topWords = [words[0], words[1]];
               midWord = words[2];
               botWords = [words[3], words[4]];
-            }
+            } // ✅ FIXED
 
             const topScale = 0.45;
             const midScale = 1.8;
@@ -523,43 +514,69 @@ export default function VideoCaptionerPage() {
               ySpacing,
             );
           } else {
-            const spaceWidth = measureTxt(" ", false) * 0.5;
-            let totalWidth = 0;
-
-            words.forEach((w, i) => {
-              const isHero = lLayout === "one-word" ? true : i === wIndex;
-              const sc = lLayout === "one-word" ? 1.4 : isHero ? 1.1 : 1.0;
-              totalWidth +=
-                measureTxt(isUppercase ? w.toUpperCase() : w, isHero) * sc;
-            });
-            totalWidth += spaceWidth * (words.length - 1);
-
-            let currentX = -totalWidth / 2;
+            const spaceWidth = measureTxt(" ", false) * 0.4;
+            const maxContainerWidth = canvas.width * 0.85;
+            const lines: {
+              text: string;
+              isHero: boolean;
+              sc: number;
+              width: number;
+              origIndex: number;
+            }[][] = [];
+            let currentLine: any[] = [];
+            let currentLineWidth = 0;
 
             words.forEach((w, i) => {
               const isHero = lLayout === "one-word" ? true : i === wIndex;
               const sc = lLayout === "one-word" ? 1.4 : isHero ? 1.1 : 1.0;
               const fw = isUppercase ? w.toUpperCase() : w;
+              const wWidth = measureTxt(fw, isHero) * sc;
 
-              if (wIndex >= i) {
-                const timeSinceSpoken =
-                  t + syncOffset - (start + i * timePerWord);
-                const wWidth = measureTxt(fw, isHero) * sc;
-                drawText(
-                  fw,
-                  currentX + wWidth / 2,
-                  0,
-                  isHero,
-                  getAnim(timeSinceSpoken),
-                  sc,
-                );
-                currentX += wWidth + spaceWidth;
-              } else {
-                currentX += measureTxt(fw, isHero) * sc + spaceWidth;
+              if (
+                currentLineWidth + wWidth > maxContainerWidth &&
+                currentLine.length > 0
+              ) {
+                lines.push([...currentLine]);
+                currentLine = [];
+                currentLineWidth = 0;
               }
+              currentLine.push({
+                text: fw,
+                isHero,
+                sc,
+                width: wWidth,
+                origIndex: i,
+              });
+              currentLineWidth += wWidth + spaceWidth;
+            });
+            if (currentLine.length > 0) lines.push(currentLine);
+
+            const lineHeight = baseFontSize * 1.2;
+            const startY = -((lines.length - 1) * lineHeight) / 2;
+
+            lines.forEach((line, lineIdx) => {
+              const totalLineWidth =
+                line.reduce((sum, wordObj) => sum + wordObj.width, 0) +
+                spaceWidth * (line.length - 1);
+              let currentX = -totalLineWidth / 2;
+
+              line.forEach((wordObj) => {
+                if (wIndex >= wordObj.origIndex) {
+                  const timeSinceSpoken =
+                    t + syncOffset - (start + wordObj.origIndex * timePerWord);
+                  drawText(
+                    wordObj.text,
+                    currentX + wordObj.width / 2,
+                    startY + lineIdx * lineHeight,
+                    wordObj.isHero,
+                    getAnim(timeSinceSpoken),
+                    wordObj.sc,
+                  );
+                }
+                currentX += wordObj.width + spaceWidth;
+              });
             });
           }
-
           ctx.restore();
         }
       }
@@ -583,7 +600,6 @@ export default function VideoCaptionerPage() {
     };
   };
 
-  // --- 🌟 DYNAMIC RE-CHUNKING ENGINE 🌟 ---
   const formatTranscriptByLayout = (
     chunks: TranscriptChunk[],
     targetLayout: string,
@@ -593,6 +609,7 @@ export default function VideoCaptionerPage() {
     if (targetLayout === "one-word") wordsPerChunk = 1;
     if (targetLayout === "two-words") wordsPerChunk = 2;
     if (targetLayout === "three-words") wordsPerChunk = 3;
+    if (targetLayout === "classic") wordsPerChunk = 6;
 
     const allWords: { text: string; start: number; end: number }[] = [];
 
@@ -629,7 +646,6 @@ export default function VideoCaptionerPage() {
     return newChunks;
   };
 
-  // --- 🌟 STYLE GETTER / SETTER HELPERS 🌟 ---
   const getActiveStyle = (key: keyof ChunkStyle, globalValue: any) => {
     if (
       selectedChunkIndex !== null &&
@@ -673,7 +689,6 @@ export default function VideoCaptionerPage() {
     }
   };
 
-  // --- 🌟 UPLOAD & DYNAMIC ASPECT RATIO 🌟 ---
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -683,7 +698,6 @@ export default function VideoCaptionerPage() {
       return;
     }
 
-    // 1. Device Memory Constraint Check
     const isMobile = window.innerWidth <= 768;
     const limitMB = isMobile
       ? MAX_FILE_SIZE_MOBILE_MB
@@ -706,7 +720,6 @@ export default function VideoCaptionerPage() {
     mediaElement.preload = "metadata";
 
     mediaElement.onloadedmetadata = () => {
-      // 🌟 NEW: Determine and set true aspect ratio to allow 16:9, 1:1, etc.
       const width = mediaElement.videoWidth;
       const height = mediaElement.videoHeight;
       const ratio = width / height;
@@ -788,7 +801,6 @@ export default function VideoCaptionerPage() {
     }
   };
 
-  // --- TRANSCRIPT EDIT HANDLERS ---
   const handleChunkEdit = (index: number, newText: string) => {
     if (!transcript || !transcript.chunks) return;
     const updatedChunks = [...transcript.chunks];
@@ -854,7 +866,6 @@ export default function VideoCaptionerPage() {
     }
   };
 
-  // --- VIDEO PLAYBACK HANDLERS ---
   const togglePlay = () => {
     if (videoRef.current) {
       if (isPlaying) videoRef.current.pause();
@@ -879,7 +890,6 @@ export default function VideoCaptionerPage() {
     setIsPlaying(false);
   };
 
-  // --- 🌟 ADVANCED CAPTION ANIMATION LOGIC 🌟 ---
   const { activeChunk, wordIndex, words, activeChunkIndex } = useMemo(() => {
     if (!transcript?.chunks)
       return {
@@ -936,7 +946,6 @@ export default function VideoCaptionerPage() {
     };
   }, [transcript, currentTime, sync]);
 
-  // Auto-scroll logic
   useEffect(() => {
     if (
       !isEditing &&
@@ -955,9 +964,6 @@ export default function VideoCaptionerPage() {
     }
   }, [activeChunkIndex, isEditing, isExporting]);
 
-  // ==========================================
-  // 🌟 DERIVED VARIABLES FOR RENDERER 🌟
-  // ==========================================
   const activePosX = activeChunk?.style?.posX ?? posX;
   const activePosY = activeChunk?.style?.posY ?? posY;
   const activeSize = activeChunk?.style?.size ?? size;
@@ -970,7 +976,10 @@ export default function VideoCaptionerPage() {
   const activeAnimation = activeChunk?.style?.animation ?? animation;
   const activeLayout = activeChunk?.style?.layout ?? layout;
 
-  // ✅ DYNAMIC FONT RENDERING ENGINE
+  const lStrokeEnabled = activeChunk?.style?.strokeEnabled ?? strokeEnabled;
+  const lStrokeColor = activeChunk?.style?.strokeColor ?? strokeColor;
+  const lStrokeWidth = activeChunk?.style?.strokeWidth ?? strokeWidth;
+
   const getActivePremiumFontStyles = () => {
     switch (activeFontStyle) {
       case "apple-premium":
@@ -980,7 +989,6 @@ export default function VideoCaptionerPage() {
           fontWeight: 900,
           textTransform: "none" as const,
           letterSpacing: "-0.04em",
-          WebkitTextStroke: "0px",
           textShadow: `0px 4px ${activeGlow}px ${activeGlowColor}, 0px 8px 32px rgba(0,0,0,0.5)`,
         };
       case "viral-impact":
@@ -989,8 +997,22 @@ export default function VideoCaptionerPage() {
           fontWeight: 900,
           textTransform: "uppercase" as const,
           letterSpacing: "0.02em",
-          WebkitTextStroke: "0.06em black",
+          WebkitTextStroke: lStrokeEnabled
+            ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
+            : "0px",
           textShadow: `0.08em 0.08em 0px black, 0 0 ${activeGlow}px ${activeGlowColor}`,
+        };
+      case "viral-italic":
+        return {
+          fontFamily: "'Montserrat', sans-serif",
+          fontWeight: 900,
+          fontStyle: "italic",
+          textTransform: "uppercase" as const,
+          letterSpacing: "0.02em",
+          WebkitTextStroke: lStrokeEnabled
+            ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
+            : "0px",
+          textShadow: `0 0 ${activeGlow}px ${activeGlowColor}`,
         };
       case "cinematic":
         return {
@@ -998,7 +1020,9 @@ export default function VideoCaptionerPage() {
           fontWeight: 500,
           textTransform: "uppercase" as const,
           letterSpacing: "0.15em",
-          WebkitTextStroke: "0px",
+          WebkitTextStroke: lStrokeEnabled
+            ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
+            : "0px",
           textShadow: `0px 2px ${activeGlow}px ${activeGlowColor}`,
         };
       case "futura-bold":
@@ -1007,7 +1031,9 @@ export default function VideoCaptionerPage() {
           fontWeight: 800,
           textTransform: "uppercase" as const,
           letterSpacing: "0.05em",
-          WebkitTextStroke: "0px",
+          WebkitTextStroke: lStrokeEnabled
+            ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
+            : "0px",
           textShadow: `2px 2px 0px black, 0 0 ${activeGlow}px ${activeGlowColor}`,
         };
       case "roboto-clean":
@@ -1016,7 +1042,9 @@ export default function VideoCaptionerPage() {
           fontWeight: 600,
           textTransform: "none" as const,
           letterSpacing: "0em",
-          WebkitTextStroke: "0px",
+          WebkitTextStroke: lStrokeEnabled
+            ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
+            : "0px",
           textShadow: `1px 1px 4px rgba(0,0,0,0.8), 0 0 ${activeGlow}px ${activeGlowColor}`,
         };
       case "gaming-bangers":
@@ -1025,7 +1053,9 @@ export default function VideoCaptionerPage() {
           fontWeight: 900,
           textTransform: "uppercase" as const,
           letterSpacing: "0.02em",
-          WebkitTextStroke: "0.08em black",
+          WebkitTextStroke: lStrokeEnabled
+            ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
+            : "0px",
           textShadow: `0.1em 0.1em 0px black, 0 0 ${activeGlow}px ${activeGlowColor}`,
         };
       case "comic-quirky":
@@ -1034,8 +1064,21 @@ export default function VideoCaptionerPage() {
           fontWeight: 700,
           textTransform: "none" as const,
           letterSpacing: "0em",
-          WebkitTextStroke: "0.04em black",
+          WebkitTextStroke: lStrokeEnabled
+            ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
+            : "0px",
           textShadow: `2px 2px 0px black, 0 0 ${activeGlow}px ${activeGlowColor}`,
+        };
+      case "komika-axis":
+        return {
+          fontFamily: "'Luckiest Guy', cursive",
+          fontWeight: 400,
+          textTransform: "uppercase" as const,
+          letterSpacing: "0.05em",
+          WebkitTextStroke: lStrokeEnabled
+            ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
+            : "0px",
+          textShadow: `0.1em 0.1em 0px black, 0 0 ${activeGlow}px ${activeGlowColor}`,
         };
       default:
         return {
@@ -1043,7 +1086,9 @@ export default function VideoCaptionerPage() {
           fontWeight: 800,
           textTransform: "uppercase" as const,
           letterSpacing: "0em",
-          WebkitTextStroke: "1px black",
+          WebkitTextStroke: lStrokeEnabled
+            ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
+            : "0px",
           textShadow: `0 0 ${activeGlow}px ${activeGlowColor}`,
         };
     }
@@ -1052,9 +1097,6 @@ export default function VideoCaptionerPage() {
   const { WebkitTextStroke, textShadow, ...baseFontStyles } =
     getActivePremiumFontStyles();
 
-  // ==========================================
-  // RENDER: UPLOAD STATE (Pre-Transcription)
-  // ==========================================
   if (!transcript) {
     return (
       <div className="flex flex-col h-full text-gray-300">
@@ -1120,7 +1162,6 @@ export default function VideoCaptionerPage() {
           </div>
         </div>
 
-        {/* BOTTOM INPUT BAR */}
         <div className="w-full px-4 pb-4 pt-2 bg-transparent z-10">
           <div className="relative w-full max-w-4xl mx-auto p-1 rounded-xl flex items-start gap-3">
             <div className="shrink-0 relative">
@@ -1176,14 +1217,14 @@ export default function VideoCaptionerPage() {
     );
   }
 
-  // ==========================================
-  // RENDER: STYLE LAB (Post-Transcription)
-  // ==========================================
   return (
     <>
       <style
         dangerouslySetInnerHTML={{
           __html: `
+        @import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,900;1,900&display=swap');
+
         @keyframes caption-pop { 0% { transform: scale(0.85) translateY(10px); opacity: 0; } 50% { transform: scale(1.02) translateY(-1px); opacity: 1; } 100% { transform: scale(1) translateY(0); opacity: 1; } }
         @keyframes caption-spring { 0% { transform: scale(0.4) translateY(15px); opacity: 0; } 60% { transform: scale(1.2) translateY(-2px); opacity: 1; } 100% { transform: scale(1) translateY(0); opacity: 1; } }
         @keyframes caption-fade { 0% { opacity: 0; } 100% { opacity: 1; } }
@@ -1197,9 +1238,7 @@ export default function VideoCaptionerPage() {
       />
 
       <div className="flex flex-col lg:flex-row w-full h-[calc(100vh-64px)] text-gray-200 overflow-hidden bg-transparent">
-        {/* 🌟 LEFT COLUMN: VIDEO PLAYER 🌟 */}
-        <div className="w-full h-[45%] lg:h-full lg:flex-1 flex flex-col items-center justify-center p-4 sm:p-6 relative border-b border-white/5 lg:border-b-0 shrink-0">
-          {/* 🌟 DYNAMIC ASPECT RATIO CONTAINER 🌟 */}
+        <div className="w-full h-[45%] lg:h-full lg:flex-1 flex flex-col items-center justify-center relative border-b border-white/5 lg:border-b-0 shrink-0">
           <div
             className="relative h-full max-h-[40vh] lg:max-h-[65vh] max-w-full bg-black rounded-2xl lg:rounded-4xl border border-white/10 shadow-2xl overflow-hidden group"
             style={{ aspectRatio: videoAspectRatio }}
@@ -1213,7 +1252,6 @@ export default function VideoCaptionerPage() {
               playsInline
             />
 
-            {/* 🌟 EXPORTING OVERLAY 🌟 */}
             {isExporting && (
               <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center">
                 <Loader2 className="w-10 h-10 animate-spin text-teal-500 mb-4" />
@@ -1226,21 +1264,20 @@ export default function VideoCaptionerPage() {
               </div>
             )}
 
-            {/* 🌟 DYNAMIC CAPTION OVERLAYS 🌟 */}
             <div
-              className={`absolute inset-0 flex items-center justify-center pointer-events-none p-4 lg:p-6 ${isExporting ? "opacity-0" : "opacity-100"}`}
+              className={`absolute inset-0 flex items-center justify-center pointer-events-none ${isExporting ? "opacity-0" : "opacity-100"}`}
             >
               <div
                 style={{
                   transform: `translate(${activePosX}px, ${activePosY}px) rotate(${activeRotation}deg)`,
                   fontSize: `${activeSize}px`,
+                  lineHeight: 1,
                 }}
-                className="w-full flex justify-center items-center"
+                className="w-[85%] flex justify-center items-center"
               >
                 {activeChunk &&
                   words.length > 0 &&
                   (() => {
-                    // --- 🌟 HORMOZI STACK 🌟 ---
                     if (activeLayout === "hormozi") {
                       let topWords: string[] = [];
                       let middleWord: string[] = [];
@@ -1283,9 +1320,10 @@ export default function VideoCaptionerPage() {
                               fontSize: isHero ? `1.8em` : `0.45em`,
                               opacity: isSpoken ? 1 : 0,
                               transition: "all 0.25s ease-out",
-                              WebkitTextStroke: isHero
-                                ? WebkitTextStroke
-                                : "0px",
+                              WebkitTextStroke:
+                                isHero || lStrokeEnabled
+                                  ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
+                                  : "0px",
                               textShadow: isHero
                                 ? textShadow
                                 : `1px 1px 3px rgba(0,0,0,0.8)`,
@@ -1333,9 +1371,11 @@ export default function VideoCaptionerPage() {
                       );
                     }
 
-                    // --- 🌟 X-WORD LAYOUTS 🌟 ---
                     return (
-                      <div className="flex flex-wrap justify-center items-center gap-[0.25em]">
+                      <div
+                        className="flex flex-wrap justify-center items-center"
+                        style={{ gap: "0.4em" }}
+                      >
                         {words.map((word, i) => {
                           const isSpoken = wordIndex >= i;
                           const isHero =
@@ -1363,9 +1403,10 @@ export default function VideoCaptionerPage() {
                                       : `1em`,
                                 opacity: isSpoken ? 1 : 0,
                                 transition: "all 0.25s ease-out",
-                                WebkitTextStroke: isHero
-                                  ? WebkitTextStroke
-                                  : "0px",
+                                WebkitTextStroke:
+                                  isHero || lStrokeEnabled
+                                    ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
+                                    : "0px",
                                 textShadow: isHero
                                   ? textShadow
                                   : "1px 1px 3px rgba(0,0,0,0.6)",
@@ -1381,7 +1422,6 @@ export default function VideoCaptionerPage() {
               </div>
             </div>
 
-            {/* Video Overlay Controls */}
             {!isExporting && (
               <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                 <button
@@ -1403,7 +1443,6 @@ export default function VideoCaptionerPage() {
               </div>
             )}
 
-            {/* 🌟 ALWAYS VISIBLE EXPORT BUTTON 🌟 */}
             <div className="absolute bottom-2 right-2 lg:bottom-4 lg:right-4 z-50">
               <Button
                 onClick={handleExport}
@@ -1516,11 +1555,13 @@ export default function VideoCaptionerPage() {
                 <SelectContent className="bg-[#111] border-white/10 text-gray-300 text-xs">
                   <SelectItem value="apple-premium">Apple</SelectItem>
                   <SelectItem value="viral-impact">Impact</SelectItem>
+                  <SelectItem value="viral-italic">Viral Italic</SelectItem>
                   <SelectItem value="cinematic">Cinematic</SelectItem>
                   <SelectItem value="futura-bold">Bold</SelectItem>
                   <SelectItem value="roboto-clean">Clean</SelectItem>
                   <SelectItem value="gaming-bangers">Gaming</SelectItem>
                   <SelectItem value="comic-quirky">Quirky</SelectItem>
+                  <SelectItem value="komika-axis">Komika Style</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1612,6 +1653,23 @@ export default function VideoCaptionerPage() {
 
               <div className="flex flex-col gap-1.5">
                 <div className="flex justify-between text-[10px] lg:text-xs font-semibold text-teal-400">
+                  <span>Outline Thickness</span>
+                  <span>{getActiveStyle("strokeWidth", strokeWidth)}%</span>
+                </div>
+                <Slider
+                  min={0}
+                  max={20}
+                  value={[getActiveStyle("strokeWidth", strokeWidth)]}
+                  onValueChange={(v) =>
+                    applyStyle("strokeWidth", v[0], setStrokeWidth)
+                  }
+                  disabled={!getActiveStyle("strokeEnabled", strokeEnabled)}
+                  className={`**:data-radix-slider-range:bg-teal-500 **:[[role=slider]]:bg-white **:[[role=slider]]:border-teal-500 ${!getActiveStyle("strokeEnabled", strokeEnabled) ? "opacity-50" : ""}`}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <div className="flex justify-between text-[10px] lg:text-xs font-semibold text-teal-400">
                   <span>Sync</span>
                   <span>
                     {getActiveStyle("sync", sync) > 0 ? "+" : ""}
@@ -1627,28 +1685,14 @@ export default function VideoCaptionerPage() {
                   className="**:data-radix-slider-range:bg-teal-500 **:[[role=slider]]:bg-white **:[[role=slider]]:border-teal-500"
                 />
               </div>
-
-              <div className="flex flex-col gap-1.5">
-                <div className="flex justify-between text-[10px] lg:text-xs font-semibold text-teal-400">
-                  <span>Intensity</span>
-                  <span>{getActiveStyle("glow", glow)}px</span>
-                </div>
-                <Slider
-                  min={0}
-                  max={50}
-                  value={[getActiveStyle("glow", glow)]}
-                  onValueChange={(v) => applyStyle("glow", v[0], setGlow)}
-                  className="**:data-radix-slider-range:bg-teal-500 **:[[role=slider]]:bg-white **:[[role=slider]]:border-teal-500"
-                />
-              </div>
             </div>
           </div>
 
           {/* Color Pickers */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-8">
+          <div className="grid grid-cols-4 gap-2 sm:gap-3 mb-8">
             <div>
               <Label className="text-[9px] sm:text-[10px] text-gray-400 font-semibold mb-1.5 block truncate">
-                Main Text
+                Main
               </Label>
               <div className="relative w-full h-8 sm:h-10 rounded overflow-hidden border border-white/20 shadow-md cursor-pointer hover:border-white/40 transition">
                 <input
@@ -1663,7 +1707,7 @@ export default function VideoCaptionerPage() {
             </div>
             <div>
               <Label className="text-[9px] sm:text-[10px] text-gray-400 font-semibold mb-1.5 block truncate">
-                Hero Text
+                Hero
               </Label>
               <div className="relative w-full h-8 sm:h-10 rounded overflow-hidden border border-white/20 shadow-md cursor-pointer hover:border-white/40 transition">
                 <input
@@ -1678,7 +1722,37 @@ export default function VideoCaptionerPage() {
             </div>
             <div>
               <Label className="text-[9px] sm:text-[10px] text-gray-400 font-semibold mb-1.5 block truncate">
-                Glow Color
+                Outline
+              </Label>
+              <div
+                className="relative w-full h-8 sm:h-10 rounded overflow-hidden border border-white/20 shadow-md cursor-pointer transition flex items-center justify-center bg-black/50 hover:border-white/40"
+                onClick={() =>
+                  applyStyle(
+                    "strokeEnabled",
+                    !getActiveStyle("strokeEnabled", strokeEnabled),
+                    setStrokeEnabled,
+                  )
+                }
+              >
+                <span className="text-[10px] font-bold text-white z-10 pointer-events-none">
+                  {getActiveStyle("strokeEnabled", strokeEnabled)
+                    ? "ON"
+                    : "OFF"}
+                </span>
+                <input
+                  type="color"
+                  value={getActiveStyle("strokeColor", strokeColor)}
+                  onChange={(e) =>
+                    applyStyle("strokeColor", e.target.value, setStrokeColor)
+                  }
+                  onClick={(e) => e.stopPropagation()}
+                  className={`absolute inset-0 w-[150%] h-[150%] -translate-x-4 -translate-y-4 cursor-pointer ${!getActiveStyle("strokeEnabled", strokeEnabled) ? "opacity-0" : "opacity-30"}`}
+                />
+              </div>
+            </div>
+            <div>
+              <Label className="text-[9px] sm:text-[10px] text-gray-400 font-semibold mb-1.5 block truncate">
+                Shadow
               </Label>
               <div className="relative w-full h-8 sm:h-10 rounded overflow-hidden border border-white/20 shadow-md cursor-pointer hover:border-white/40 transition">
                 <input
@@ -1701,7 +1775,6 @@ export default function VideoCaptionerPage() {
               </h3>
 
               <div className="flex items-center gap-2">
-                {/* 🌟 NEW: SRT DOWNLOAD BUTTON 🌟 */}
                 <button
                   onClick={handleDownloadSRT}
                   className="text-[10px] lg:text-xs font-medium px-3 py-1 lg:px-4 lg:py-1.5 rounded-full transition-all text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 flex items-center gap-1"

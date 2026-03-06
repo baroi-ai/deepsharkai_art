@@ -1,5 +1,8 @@
 import { Metadata } from "next";
-import AboutContent from "@/components/about-content"; // We'll create this component below
+import AboutContent from "@/components/about-content";
+
+// ✅ THE MAGIC BULLET: Ensures consistency with the rest of your app and guarantees the build passes!
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   // Focus the title on your USP and brand identity
@@ -39,5 +42,6 @@ export const metadata: Metadata = {
 };
 
 export default function AboutPage() {
+  // ✅ Kept it clean and simple!
   return <AboutContent />;
 }

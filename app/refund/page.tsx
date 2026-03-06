@@ -3,6 +3,9 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import Link from "next/link";
 
+// ✅ THE MAGIC BULLET
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Refund Policy | DeepShark AI",
   description:

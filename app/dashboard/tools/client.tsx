@@ -127,9 +127,7 @@ export default function ToolsPage() {
           Explore AI Tools
         </h1>
         <p className="text-gray-400 max-w-2xl text-sm md:text-base">
-          Discover our complete collection of generative AI tools. From video
-          synthesis to voice cloning, find the perfect tool for your next
-          project.
+          Discover our complete collection of generative AI tools.
         </p>
 
         <div className="relative w-full max-w-lg mt-4">

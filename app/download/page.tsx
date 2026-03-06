@@ -1,6 +1,8 @@
 import { Metadata } from "next";
 import DownloadPageClient from "./client"; // Import your renamed client component
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Download DeepShark AI App | iOS & Android",
   description:

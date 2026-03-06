@@ -1,6 +1,8 @@
 import { Metadata } from "next";
 import PricingPageClient from "./client"; // Import your client component
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Pricing & Credits | DeepShark AI",
   description:
