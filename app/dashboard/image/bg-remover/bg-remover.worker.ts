@@ -1,51 +1,50 @@
-import { pipeline, env, RawImage } from "@huggingface/transformers";
+/// <reference lib="webworker" />
 
-// Configuration
-env.allowLocalModels = false;
+// @ts-ignore
+delete globalThis.SharedArrayBuffer;
+// @ts-ignore
+self.SharedArrayBuffer = undefined;
 
-// ✅ SMART CACHE FIX
-// Default to false (Safe Mode)
-env.useBrowserCache = false;
+let pipeline: any = null;
+let AutoModel: any = null;
+let AutoProcessor: any = null;
+let RawImage: any = null;
+let env: any = null;
 
-// Try to enable cache ONLY if the browser supports it
-try {
-  // 'caches' is the API that crashes some mobiles. We check if it exists first.
-  if (typeof caches !== "undefined") {
-    env.useBrowserCache = true;
+// Memory caches for the two different models
+let currentModelName = "";
+let modnetPipeline: any = null;
+let briaModel: any = null;
+let briaProcessor: any = null;
+
+async function initAI() {
+  if (env) return; // Already imported
+
+  const transformers = await import("@huggingface/transformers");
+  pipeline = transformers.pipeline;
+  AutoModel = transformers.AutoModel;
+  AutoProcessor = transformers.AutoProcessor;
+  RawImage = transformers.RawImage;
+  env = transformers.env;
+
+  env.allowLocalModels = false;
+  env.useBrowserCache = false;
+
+  try {
+    if (typeof caches !== "undefined") env.useBrowserCache = true;
+  } catch (e) {
+    console.warn("Cache API disabled.");
   }
-} catch (e) {
-  // If checking throws a security error (common in Incognito), keep it false.
-  console.warn("Cache API disabled due to browser restrictions.");
 }
 
-// ✅ FIXED: Swapped to the commercially-free Apache 2.0 model!
-const MODEL_NAME = "Xenova/modnet";
-
-let segmenter: any = null;
-
 self.onmessage = async (event: MessageEvent) => {
-  const { action, imageBlob } = event.data;
+  const { action, imageBlob, modelName } = event.data;
 
-  // --- PRELOAD ---
-  if (action === "preload") {
-    try {
-      if (!segmenter) {
-        segmenter = await pipeline("image-segmentation", MODEL_NAME, {
-          dtype: "q8",
-          device: "wasm",
-        });
-      }
-      self.postMessage({ status: "preload-complete" });
-    } catch (e: any) {
-      console.error("Preload Error:", e);
-    }
-    return;
-  }
-
-  // --- PROCESS ---
   if (action === "process" || imageBlob) {
     try {
+      await initAI();
       const blob = imageBlob || event.data.imageBlob;
+      const targetModel = modelName || "briaai/RMBG-1.4"; // Default to Bria
 
       self.postMessage({
         status: "progress",
@@ -53,61 +52,131 @@ self.onmessage = async (event: MessageEvent) => {
         percent: 10,
       });
 
-      if (!segmenter) {
-        segmenter = await pipeline("image-segmentation", MODEL_NAME, {
-          dtype: "q8",
-          device: "wasm",
-          progress_callback: (data: any) => {
-            if (data.status === "progress") {
-              const percent = data.progress ? Math.round(data.progress) : 0;
-              self.postMessage({
-                status: "progress",
-                key: "Downloading Model...",
-                percent,
-              });
-            }
-          },
+      // --- BRANCH 1: FAST MOBILE MODEL (MODNET) ---
+      if (targetModel === "Xenova/modnet") {
+        if (!modnetPipeline) {
+          modnetPipeline = await pipeline("image-segmentation", targetModel, {
+            device: "wasm",
+            progress_callback: (data: any) => {
+              if (data.status === "progress") {
+                self.postMessage({
+                  status: "progress",
+                  key: "Downloading Fast Model...",
+                  percent: Math.round(data.progress || 0),
+                });
+              }
+            },
+          });
+        }
+
+        self.postMessage({
+          status: "progress",
+          key: "Analyzing...",
+          percent: 50,
         });
+        const image = await RawImage.fromBlob(blob);
+        const output = await modnetPipeline(image);
+
+        self.postMessage({
+          status: "progress",
+          key: "Compositing...",
+          percent: 80,
+        });
+        const mask = Array.isArray(output)
+          ? output[0].mask
+          : output.mask || output;
+
+        const canvas = new OffscreenCanvas(image.width, image.height);
+        const ctx = canvas.getContext("2d")!;
+        const originalBitmap = await createImageBitmap(blob);
+        ctx.drawImage(originalBitmap, 0, 0);
+        const pixelData = ctx.getImageData(0, 0, image.width, image.height);
+
+        for (let i = 0; i < mask.data.length; i++) {
+          pixelData.data[i * 4 + 3] = mask.data[i];
+        }
+        ctx.putImageData(pixelData, 0, 0);
+        const resultBlob = await canvas.convertToBlob({ type: "image/png" });
+        self.postMessage({ status: "success", blob: resultBlob });
       }
 
-      self.postMessage({
-        status: "progress",
-        key: "Analyzing...",
-        percent: 50,
-      });
+      // --- BRANCH 2: HIGH QUALITY DESKTOP MODEL (BRIA AI) ---
+      else if (targetModel === "briaai/RMBG-1.4") {
+        if (!briaModel) {
+          briaModel = await AutoModel.from_pretrained(targetModel, {
+            device: "wasm",
+            progress_callback: (data: any) => {
+              if (data.status === "progress") {
+                self.postMessage({
+                  status: "progress",
+                  key: "Downloading HD Model...",
+                  percent: Math.round(data.progress || 0),
+                });
+              }
+            },
+          });
+          briaProcessor = await AutoProcessor.from_pretrained(targetModel);
+        }
 
-      const image = await RawImage.fromBlob(blob);
-      const output = await segmenter(image);
+        self.postMessage({
+          status: "progress",
+          key: "Analyzing...",
+          percent: 50,
+        });
+        const image = await RawImage.fromBlob(blob);
+        const inputs = await briaProcessor(image);
 
-      self.postMessage({
-        status: "progress",
-        key: "Compositing...",
-        percent: 80,
-      });
+        // The fix for Bria's custom ONNX input name
+        const results = await briaModel({ input: inputs.pixel_values });
 
-      // ModNet output is handled perfectly by this logic
-      const mask = Array.isArray(output)
-        ? output[0].mask
-        : output.mask || output;
+        self.postMessage({
+          status: "progress",
+          key: "Compositing...",
+          percent: 80,
+        });
+        const outTensor = Object.values(results)[0] as any;
+        const outData = outTensor.data;
+        const maskW = outTensor.dims[3];
+        const maskH = outTensor.dims[2];
 
-      const canvas = new OffscreenCanvas(image.width, image.height);
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas context failed");
+        const maskPixels = new Uint8ClampedArray(maskW * maskH * 4);
+        for (let i = 0; i < outData.length; i++) {
+          const val = Math.max(0, Math.min(255, Math.round(outData[i] * 255)));
+          maskPixels[i * 4 + 0] = val;
+          maskPixels[i * 4 + 1] = val;
+          maskPixels[i * 4 + 2] = val;
+          maskPixels[i * 4 + 3] = 255;
+        }
 
-      const originalBitmap = await createImageBitmap(blob);
-      ctx.drawImage(originalBitmap, 0, 0);
+        const maskCanvas = new OffscreenCanvas(maskW, maskH);
+        maskCanvas
+          .getContext("2d")!
+          .putImageData(new ImageData(maskPixels, maskW, maskH), 0, 0);
 
-      const pixelData = ctx.getImageData(0, 0, image.width, image.height);
+        const originalBitmap = await createImageBitmap(blob);
+        const origW = originalBitmap.width;
+        const origH = originalBitmap.height;
 
-      for (let i = 0; i < mask.data.length; i++) {
-        pixelData.data[i * 4 + 3] = mask.data[i];
+        const resizedMaskCanvas = new OffscreenCanvas(origW, origH);
+        const resizedCtx = resizedMaskCanvas.getContext("2d")!;
+        resizedCtx.drawImage(maskCanvas, 0, 0, origW, origH);
+        const resizedMaskData = resizedCtx.getImageData(0, 0, origW, origH);
+
+        const finalCanvas = new OffscreenCanvas(origW, origH);
+        const finalCtx = finalCanvas.getContext("2d")!;
+        finalCtx.drawImage(originalBitmap, 0, 0);
+        const pixelData = finalCtx.getImageData(0, 0, origW, origH);
+
+        for (let i = 0; i < pixelData.data.length / 4; i++) {
+          pixelData.data[i * 4 + 3] = resizedMaskData.data[i * 4 + 0];
+        }
+
+        finalCtx.putImageData(pixelData, 0, 0);
+        const resultBlob = await finalCanvas.convertToBlob({
+          type: "image/png",
+        });
+        self.postMessage({ status: "success", blob: resultBlob });
       }
-
-      ctx.putImageData(pixelData, 0, 0);
-
-      const resultBlob = await canvas.convertToBlob({ type: "image/png" });
-
-      self.postMessage({ status: "success", blob: resultBlob });
     } catch (e: any) {
       console.error("Processing Error:", e);
       self.postMessage({ status: "error", error: e.message || String(e) });

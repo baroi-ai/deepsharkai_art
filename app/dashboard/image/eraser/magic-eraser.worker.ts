@@ -1,9 +1,8 @@
 /// <reference lib="webworker" />
 
-// ✅ FIX: TypeScript declaration for importScripts
 declare function importScripts(...urls: string[]): void;
 
-// ✅ CONFIG: Load OpenCV from public folder
+// ✅ Load OpenCV from your public folder
 const OPENCV_URL = "/js/opencv.js";
 
 let cv: any = null;
@@ -17,7 +16,7 @@ function loadOpenCV() {
       onRuntimeInitialized: () => {
         // @ts-ignore
         cv = self.cv;
-        console.log("Worker: OpenCV Ready");
+        console.log("Worker: OpenCV Ready and Loaded!");
         resolve(null);
       },
     };
@@ -46,34 +45,53 @@ self.onmessage = async (event: MessageEvent) => {
 
   // --- 2. PROCESS ---
   if (action === "process") {
-    if (!cv) await loadOpenCV();
+    if (!cv) {
+      try {
+        await loadOpenCV();
+      } catch (e) {
+        self.postMessage({ status: "error", error: "Failed to load OpenCV" });
+        return;
+      }
+    }
 
     try {
-      // 1. Convert Bitmaps to Matrices (RGBA format)
+      // 1. Convert Bitmaps to OpenCV Matrices (RGBA format)
       const srcRgba = await bitmapToMat(imageBitmap);
       const maskRgba = await bitmapToMat(maskBitmap);
 
-      // 2. Convert Source to RGB (Remove Alpha) - CRITICAL FIX
-      // cv.inpaint crashes on RGBA images
+      // 2. Convert Source to RGB (OpenCV inpaint crashes on RGBA images)
       const srcRgb = new cv.Mat();
       cv.cvtColor(srcRgba, srcRgb, cv.COLOR_RGBA2RGB);
 
-      // 3. Prepare Mask (Convert to Grayscale -> Binary)
+      // 3. Prepare Mask (Extract the Alpha channel where the user drew)
       const maskGray = new cv.Mat();
-      cv.cvtColor(maskRgba, maskGray, cv.COLOR_RGBA2GRAY);
+      // Extract just the transparency layer from the mask canvas
+      const rgbaPlanes = new cv.MatVector();
+      cv.split(maskRgba, rgbaPlanes);
+      rgbaPlanes.get(3).copyTo(maskGray); // Get Alpha channel
+      rgbaPlanes.delete();
 
-      // ✅ IMPROVEMENT: Stronger threshold to ensure a solid mask
-      cv.threshold(maskGray, maskGray, 5, 255, cv.THRESH_BINARY);
+      // Ensure the mask is strictly binary (Black and White)
+      cv.threshold(maskGray, maskGray, 10, 255, cv.THRESH_BINARY);
 
-      // 4. Run Inpainting
+      // 4. Run OpenCV Inpainting
       const dstRgb = new cv.Mat();
 
-      // ✅ IMPROVEMENT: Increased radius to 10 for better blending, and using INPAINT_NS (Navier-Stokes) which often looks better than TELEA
+      // ✅ USING INPAINT_NS (Navier-Stokes) for smoother, higher quality fills.
+      // A radius of 10 gives it enough surrounding pixels to blend nicely.
       cv.inpaint(srcRgb, maskGray, dstRgb, 10, cv.INPAINT_NS);
 
-      // 5. Convert Result back to RGBA for Browser
+      // 5. Convert Result back to RGBA for Browser Canvas
       const dstRgba = new cv.Mat();
       cv.cvtColor(dstRgb, dstRgba, cv.COLOR_RGB2RGBA);
+
+      // Restore original alpha channel from the source image
+      const finalPlanes = new cv.MatVector();
+      const originalPlanes = new cv.MatVector();
+      cv.split(dstRgba, finalPlanes);
+      cv.split(srcRgba, originalPlanes);
+      originalPlanes.get(3).copyTo(finalPlanes.get(3)); // Copy original alpha
+      cv.merge(finalPlanes, dstRgba);
 
       // 6. Export to ImageData
       const imgData = new ImageData(
@@ -82,14 +100,17 @@ self.onmessage = async (event: MessageEvent) => {
         dstRgba.rows,
       );
 
-      // 7. Cleanup Memory (Prevent Leaks)
+      // 7. Cleanup Memory (CRITICAL: Prevents browser tab from crashing)
       srcRgba.delete();
       maskRgba.delete();
       srcRgb.delete();
       maskGray.delete();
       dstRgb.delete();
       dstRgba.delete();
+      finalPlanes.delete();
+      originalPlanes.delete();
 
+      // 8. Return to UI
       self.postMessage({ status: "done", result: imgData }, [
         imgData.data.buffer,
       ]);

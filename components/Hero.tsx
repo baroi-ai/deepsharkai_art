@@ -121,7 +121,9 @@ const Hero = () => {
           playsInline
           className="object-cover w-full h-full opacity-50"
           key={isMobile ? "mobile-video" : "desktop-video"}
-          poster="/videos/hero-poster.webp"
+          poster={
+            isMobile ? "/videos/hero-mobile.webp" : "/videos/hero-poster.webp"
+          }
         >
           <source src={currentSources.webm} type="video/webm" />
           <source src={currentSources.mp4} type="video/mp4" />

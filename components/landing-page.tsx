@@ -24,6 +24,8 @@ import Footer from "./Footer";
 import LayerExplosionHero from "./LayerExplosionHero";
 import UpscalerScrollHero from "./Upscaler";
 import SkinEnhancerInteractiveHero from "./SkinEnhancer";
+import BgRemoverInteractiveHero from "./BgRemoverInteractiveHero";
+import CaptionGeneratorInteractiveHero from "./CaptionGeneratorInteractiveHero";
 
 const LandingPage = () => {
   return (
@@ -41,6 +43,10 @@ const LandingPage = () => {
       <LayerExplosionHero />
 
       <UpscalerScrollHero />
+
+      <BgRemoverInteractiveHero />
+
+      <CaptionGeneratorInteractiveHero />
 
       <SkinEnhancerInteractiveHero />
 

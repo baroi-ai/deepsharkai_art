@@ -64,6 +64,7 @@ export async function getUserProfile() {
     subscription: subscription
       ? {
           planId: subscription.planId,
+          subscriptionId: subscription.subscriptionId,
           status: subscription.status,
           currentPeriodEnd: subscription.currentPeriodEnd?.toISOString(),
           provider: subscription.provider, // 'paypal' or 'razorpay'

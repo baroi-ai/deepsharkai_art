@@ -1,17 +1,17 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { ScanFace, ArrowRight } from "lucide-react";
+import { Eraser, ArrowRight, ShieldCheck, WifiOff, Zap } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
-export default function SkinEnhancerInteractiveHero() {
+export default function BgRemoverInteractiveHero() {
   // --- STATE FOR DRAGGABLE SLIDER ---
-  const [sliderPos, setSliderPos] = useState(0); // Starts at 0% (hidden) by default
+  const [sliderPos, setSliderPos] = useState(0); // Starts at 0% by default
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Refs to manage the auto-animation
+  // Refs to manage the auto-animation on scroll
   const hasAnimated = useRef(false);
   const animationRef = useRef<number | null>(null);
 
@@ -32,7 +32,7 @@ export default function SkinEnhancerInteractiveHero() {
 
             // Smooth "ease-out" math curve
             const easeProgress = 1 - Math.pow(1 - progress, 3);
-            setSliderPos(0 + 53 * easeProgress); // Animate from 0 to 50
+            setSliderPos(50 * easeProgress); // Animate from 0 to 50
 
             if (progress < 1) {
               animationRef.current = requestAnimationFrame(animateSlider);
@@ -68,8 +68,8 @@ export default function SkinEnhancerInteractiveHero() {
   const handleTouchMove = (e: React.TouchEvent) =>
     handleMove(e.touches[0].clientX);
 
+  // Stop auto-animation if user clicks/touches it early
   const startDragging = () => {
-    // If user clicks while the auto-animation is playing, stop the auto-animation
     if (animationRef.current) cancelAnimationFrame(animationRef.current);
     setIsDragging(true);
   };
@@ -99,7 +99,7 @@ export default function SkinEnhancerInteractiveHero() {
 
   return (
     <section
-      id="skin-enhancer"
+      id="bg-remover-hero"
       className="py-24 relative w-full overflow-hidden bg-slate-950 flex flex-col items-center justify-center px-4 md:px-6"
     >
       {/* Background Gradients */}
@@ -109,17 +109,17 @@ export default function SkinEnhancerInteractiveHero() {
       {/* 🌟 HEADER TEXT (Fixed Layout, No Overlap) 🌟 */}
       <div className="flex flex-col items-center text-center z-30 mb-10 max-w-2xl mx-auto">
         <span className="mb-4 inline-flex items-center gap-2 border border-teal-400/30 text-teal-400 px-3 py-1 text-sm rounded-md bg-teal-500/10">
-          <ScanFace className="w-4 h-4" /> AI Skin Enhancer
+          <Eraser className="w-4 h-4" /> AI Background Remover
         </span>
         <h2 className="text-3xl md:text-5xl font-bold mb-4 text-white">
-          Plastic AI to{" "}
+          Free{" "}
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-cyan-400">
-            Real Skin.
+            Bg Remover
           </span>
         </h2>
-        <p className="text-gray-400 text-lg">
-          AI magically remove plastic smoothness and restore natural skin
-          textures.
+        <p className="text-gray-400 text-lg mb-6">
+          100% Free forever. Runs entirely offline in your browser for absolute
+          privacy.
         </p>
       </div>
 
@@ -131,38 +131,51 @@ export default function SkinEnhancerInteractiveHero() {
         onTouchStart={startDragging}
         onMouseMove={handleMouseMove}
         onTouchMove={handleTouchMove}
+        style={{
+          // Checkered background to make the transparent 'after' image pop
+          backgroundImage:
+            "repeating-conic-gradient(#1f2937 0% 25%, transparent 0% 50%)",
+          backgroundSize: "20px 20px",
+        }}
       >
-        {/* BOTTOM LAYER: BEFORE IMAGE (Smooth AI Skin) */}
-        {/* 👈 PUT YOUR PLASTIC "BEFORE" IMAGE PATH HERE */}
-        <img
-          src="/tools/sking.jpeg"
-          alt="Before Enhancement"
-          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-        />
-
-        {/* TOP LAYER: AFTER IMAGE (Realistic Skin Texture) */}
+        {/* LEFT SIDE: AFTER IMAGE (Transparent Background) */}
         <div
           style={{
             clipPath: `polygon(0 0, ${sliderPos}% 0, ${sliderPos}% 100%, 0 100%)`,
           }}
           className="absolute inset-0 z-10 pointer-events-none"
         >
-          {/* 👈 PUT YOUR TEXTURED "AFTER" IMAGE PATH HERE */}
+          {/* 👈 PUT YOUR TRANSPARENT "AFTER" IMAGE PATH HERE */}
           <img
-            src="/tools/skin.jpg"
-            alt="After Enhancement"
+            src="/tools/removed.png"
+            alt="Transparent Background"
             className="absolute inset-0 w-full h-full object-cover pointer-events-none"
           />
-
-          {/* "ENHANCED" Badge */}
+          {/* "REMOVED" Badge */}
           <div className="absolute top-4 left-4 bg-teal-500 text-black text-[10px] md:text-xs font-black px-3 py-1 rounded shadow-lg uppercase tracking-widest">
-            Skin Enhanced
+            Removed
           </div>
         </div>
 
-        {/* "ORIGINAL" Badge */}
-        <div className="absolute top-4 right-4 bg-black/70 backdrop-blur-md border border-white/20 text-white text-[10px] md:text-xs font-bold px-3 py-1 rounded shadow-lg uppercase tracking-widest z-0">
-          Original AI
+        {/* RIGHT SIDE: BEFORE IMAGE (Original Background) */}
+        <div
+          style={{
+            // Dual clip-path: This hides the left side of the original image
+            // so it doesn't bleed under the transparent 'after' image!
+            clipPath: `polygon(${sliderPos}% 0, 100% 0, 100% 100%, ${sliderPos}% 100%)`,
+          }}
+          className="absolute inset-0 z-10 pointer-events-none"
+        >
+          {/* 👈 PUT YOUR ORIGINAL "BEFORE" IMAGE PATH HERE */}
+          <img
+            src="/tools/bg.png"
+            alt="Original Photo"
+            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          />
+          {/* "ORIGINAL" Badge */}
+          <div className="absolute top-4 right-4 bg-black/70 backdrop-blur-md border border-white/20 text-white text-[10px] md:text-xs font-bold px-3 py-1 rounded shadow-lg uppercase tracking-widest">
+            Original
+          </div>
         </div>
 
         {/* 🌟 THE DRAGGABLE DIVIDER LINE 🌟 */}
@@ -181,10 +194,10 @@ export default function SkinEnhancerInteractiveHero() {
       </div>
 
       {/* Call to Action */}
-      <div className="text-center mt-10 z-30">
-        <Link href="/dashboard/image/skin-enhancer">
+      <div className="text-center mt-10">
+        <Link href="/dashboard/image/bg-remover">
           <Button className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-black px-8">
-            Try Skin Enhancer <ArrowRight className="ml-2 h-4 w-4" />
+            Try Background Remover <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </Link>
       </div>

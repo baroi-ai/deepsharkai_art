@@ -54,6 +54,7 @@ const ProfilePage = () => {
     initials: string;
     subscription?: {
       planId: string;
+      subscriptionId: string;
       status: string; // 'active', 'halted', 'cancelled', 'pending'
       currentPeriodEnd: string;
     } | null;
@@ -117,15 +118,31 @@ const ProfilePage = () => {
   };
 
   // --- 3. Subscription Handler (Real) ---
+  // --- 3. Subscription Handler (Real) ---
   const proceedWithSubscriptionCancellation = async () => {
+    // 1. Check if we have the ID before trying to cancel
+    if (!currentUser?.subscription?.subscriptionId) {
+      toast.error("Could not find your subscription ID.");
+      return;
+    }
+
     setIsCancellingSub(true);
     try {
-      const result = await cancelSubscriptionAction();
+      // 2. Call the Dodo cancellation API we built
+      const res = await fetch("/api/dodo/cancel-subscription", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subscriptionId: currentUser.subscription.subscriptionId,
+        }),
+      });
 
-      if (result.success) {
+      const result = await res.json();
+
+      if (res.ok) {
         toast.success("Subscription cancelled successfully.");
 
-        // Refresh profile to reflect new status
+        // Refresh profile to reflect new 'canceled' status
         const updatedUser = await getUserProfile();
         // @ts-ignore
         if (updatedUser) setCurrentUser(updatedUser);
