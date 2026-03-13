@@ -103,8 +103,9 @@ export default function SkinEnhancerInteractiveHero() {
       className="py-24 relative w-full overflow-hidden bg-slate-950 flex flex-col items-center justify-center px-4 md:px-6"
     >
       {/* Background Gradients */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-teal-900/20 via-slate-950 to-slate-950 -z-10" />
+      <div className="absolute inset-0 hero-gradient z-10"></div>
       <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-slate-950 via-slate-950/50 to-transparent z-20 pointer-events-none"></div>
+      <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-slate-950 to-transparent z-20"></div>
 
       {/* 🌟 HEADER TEXT (Fixed Layout, No Overlap) 🌟 */}
       <div className="flex flex-col items-center text-center z-30 mb-10 max-w-2xl mx-auto">

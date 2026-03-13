@@ -113,7 +113,7 @@ const availableModels: AvailableModel[] = [
     },
     supportsImageInput: { paramNameBackend: "image_urls" },
     settingsConfig: { negativePrompt: { paramNameBackend: "negative_prompt" } },
-  },
+  } /*
   {
     id: "fal-ai/nano-banana-pro",
     name: "Nano Banana Pro",
@@ -127,7 +127,7 @@ const availableModels: AvailableModel[] = [
     },
     supportsImageInput: { paramNameBackend: "image_url" },
     supportsResolution: true,
-  },
+  },*/,
   {
     id: "xai/grok-imagine-image",
     name: "Grok Imagine",

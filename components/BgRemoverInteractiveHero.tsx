@@ -103,8 +103,9 @@ export default function BgRemoverInteractiveHero() {
       className="py-24 relative w-full overflow-hidden bg-slate-950 flex flex-col items-center justify-center px-4 md:px-6"
     >
       {/* Background Gradients */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-teal-900/20 via-slate-950 to-slate-950 -z-10" />
+      <div className="absolute inset-0 hero-gradient z-10"></div>
       <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-slate-950 via-slate-950/50 to-transparent z-20 pointer-events-none"></div>
+      <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-slate-950 to-transparent z-20"></div>
 
       {/* 🌟 HEADER TEXT (Fixed Layout, No Overlap) 🌟 */}
       <div className="flex flex-col items-center text-center z-30 mb-10 max-w-2xl mx-auto">
@@ -197,7 +198,7 @@ export default function BgRemoverInteractiveHero() {
       <div className="text-center mt-10">
         <Link href="/dashboard/image/bg-remover">
           <Button className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-black px-8">
-            Try Background Remover <ArrowRight className="ml-2 h-4 w-4" />
+            Try BG Remover Free Forever <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </Link>
       </div>

@@ -1,88 +1,103 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { pipeline, env } from "@xenova/transformers";
+import {
+  pipeline,
+  env,
+  AutomaticSpeechRecognitionPipeline,
+} from "@xenova/transformers";
 
-// 1. "Nuclear" Polyfill (Prevents crash on process.env)
-const ctx: any = self;
-if (!ctx.process) {
-  ctx.process = { env: {} };
-}
-if (!ctx.process.env) {
-  ctx.process.env = {};
-}
+// 1. "Nuclear" Polyfill
+const ctx = self as unknown as { process: { env: Record<string, string> } };
+if (!ctx.process) ctx.process = { env: {} };
 
 // 2. Configuration
-// ✅ FORCE CACHE ON (Default to true for mobile persistence)
 env.useBrowserCache = true;
 env.allowLocalModels = false;
 
-// Optional: specific check for private mode / restrictions
-try {
-  if (typeof caches === 'undefined') {
-     console.warn("Cache API missing. Model will not be saved.");
-     env.useBrowserCache = false;
-  }
-} catch (e) {
-  // Ignore security errors, default to true is usually safer for standard mobile usage
+// 3. Define Interfaces for Type Safety
+interface ProgressUpdate {
+  status: "progress" | "done" | "initiate" | "downloading";
+  file?: string;
+  progress?: number;
+}
+
+interface WorkerMessage {
+  status: "downloading" | "processing" | "success" | "error";
+  message?: string;
+  percent?: number;
+  result?: any; // The raw output from the pipeline
+  error?: string;
 }
 
 class TranscriptionSingleton {
-  static instance: any = null;
-  static model_id = "Xenova/whisper-tiny"; // Fixed to 'tiny' for speed/size
+  private static instance: AutomaticSpeechRecognitionPipeline | null = null;
+  private static model_id = "Xenova/whisper-base";
 
-  static async getInstance(progressCallback: any) {
+  static async getInstance(
+    progressCallback: (msg: WorkerMessage) => void,
+  ): Promise<AutomaticSpeechRecognitionPipeline> {
     if (!this.instance) {
-      this.instance = await pipeline("automatic-speech-recognition", this.model_id, {
-        quantized: true, // Uses compressed model
-        progress_callback: (data: any) => {
-          // 📡 Status Updates
-          if (data.status === "progress") {
-            const p = data.progress ? Math.round(data.progress) : 0;
-            // If p jumps 0->100, it's loading from cache.
-            progressCallback({ 
-                status: "downloading", 
-                message: data.file === 'config.json' ? 'Checking Cache...' : `Downloading ${p}%`, 
-                percent: p 
-            });
-          }
-          if (data.status === "done") {
-             progressCallback({ status: "downloading", message: "Model Ready!", percent: 100 });
-          }
+      this.instance = (await pipeline(
+        "automatic-speech-recognition",
+        this.model_id,
+        {
+          quantized: true,
+          progress_callback: (data: ProgressUpdate) => {
+            if (data.status === "progress") {
+              const p = data.progress ? Math.round(data.progress) : 0;
+              progressCallback({
+                status: "downloading",
+                message:
+                  data.file === "config.json"
+                    ? "Checking Cache..."
+                    : `Downloading ${p}%`,
+                percent: p,
+              });
+            }
+            if (data.status === "done") {
+              progressCallback({
+                status: "downloading",
+                message: "Model Ready!",
+                percent: 100,
+              });
+            }
+          },
         },
-      });
+      )) as AutomaticSpeechRecognitionPipeline;
     }
     return this.instance;
   }
 }
 
-self.onmessage = async (event: MessageEvent) => {
+// 4. Strongly Typed message handler
+self.onmessage = async (event: MessageEvent<{ audio: Float32Array }>) => {
   const { audio } = event.data;
 
   try {
-    // 1. Load Model (with visual feedback)
-    const transcriber = await TranscriptionSingleton.getInstance((msg: any) => {
-      self.postMessage(msg);
-    });
+    const transcriber = await TranscriptionSingleton.getInstance(
+      (msg: WorkerMessage) => {
+        self.postMessage(msg);
+      },
+    );
 
-    // 2. Start Processing
-    self.postMessage({ status: "processing", message: "Transcribing Audio..." });
+    self.postMessage({
+      status: "processing",
+      message: "Transcribing Audio...",
+    });
 
     const output = await transcriber(audio, {
       chunk_length_s: 30,
       stride_length_s: 5,
       language: "english",
       task: "transcribe",
-      return_timestamps: true,
+      return_timestamps: "word", // Changed to 'word' for better captioning
     });
 
-    // 3. Success
     self.postMessage({ status: "success", result: output });
-
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("Worker Error:", e);
-    
-    let errorMsg = e.message || String(e);
+
+    let errorMsg = e instanceof Error ? e.message : String(e);
     if (errorMsg.includes("Cache")) {
-        errorMsg = "Storage Full or Private Mode. Cannot save model.";
+      errorMsg = "Storage Full or Private Mode. Cannot save model.";
     }
 
     self.postMessage({ status: "error", error: errorMsg });

@@ -293,7 +293,7 @@ const ImageEditingPage = () => {
     if (!prompt) return toast.error("Please enter a prompt.");
 
     setIsLoading(true);
-    toast.info("Generating... (Cost: 15 Coins)");
+    toast.info("Generating... (Cost: 10 Coins)");
 
     const newJobId = `job-${Date.now()}`;
 
@@ -658,7 +658,7 @@ const ImageEditingPage = () => {
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <>
-                    <span className="whitespace-nowrap">15</span>{" "}
+                    <span className="whitespace-nowrap">10</span>{" "}
                     <Coins className="w-3.5 h-3.5" />
                   </>
                 )}

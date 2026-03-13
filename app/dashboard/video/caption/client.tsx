@@ -88,19 +88,18 @@ export default function VideoCaptionerPage() {
 
   const [layout, setLayout] = useState("hormozi");
   const [fontStyle, setFontStyle] = useState("viral-italic");
-  const [animation, setAnimation] = useState("pop");
+  const [animation, setAnimation] = useState("fade");
   const [posX, setPosX] = useState(0);
   const [posY, setPosY] = useState(71);
   const [size, setSize] = useState(30);
   const [rotation, setRotation] = useState(0);
   const [sync, setSync] = useState(0.15);
-  const [glow, setGlow] = useState(0);
+  const [glow, setGlow] = useState(52);
   const [mainColor, setMainColor] = useState("#FFFFFF");
   const [heroColor, setHeroColor] = useState("#39FF14");
-  const [glowColor, setGlowColor] = useState("#000000");
   const [strokeEnabled, setStrokeEnabled] = useState(true);
   const [strokeColor, setStrokeColor] = useState("#000000");
-  const [strokeWidth, setStrokeWidth] = useState(12);
+  const [strokeWidth, setStrokeWidth] = useState(0);
 
   const workerRef = useRef<Worker | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -247,12 +246,14 @@ export default function VideoCaptionerPage() {
 
       const t = metadata ? metadata.mediaTime : video.currentTime;
 
-      const chunkIdx = transcript.chunks!.findIndex((c) => {
-        const syncOffset = c.style?.sync ?? sync;
+      const chunkIdx = transcript.chunks!.findIndex((c: TranscriptChunk) => {
+        const syncOffset = c.style?.sync !== undefined ? c.style.sync : sync;
         const adjustedT = t + syncOffset;
-        const end =
-          c.timestamp[1] !== null ? c.timestamp[1] : c.timestamp[0] + 2;
-        return adjustedT >= c.timestamp[0] && adjustedT < end;
+
+        const start = c.timestamp[0];
+        const end = c.timestamp[1] !== null ? c.timestamp[1] : start + 2;
+
+        return adjustedT >= start && adjustedT < end;
       });
 
       if (chunkIdx !== -1) {
@@ -267,7 +268,7 @@ export default function VideoCaptionerPage() {
           const lSize = chunk.style?.size ?? size;
           const lMainColor = chunk.style?.mainColor ?? mainColor;
           const lHeroColor = chunk.style?.heroColor ?? heroColor;
-          const lGlowColor = chunk.style?.glowColor ?? glowColor;
+          // Glow color is automatically derived from the hero/main text color
           const lGlow = chunk.style?.glow ?? glow;
           const lPosX = chunk.style?.posX ?? posX;
           const lPosY = chunk.style?.posY ?? posY;
@@ -378,32 +379,24 @@ export default function VideoCaptionerPage() {
                 : "700";
             ctx.font = `${fontStylePrefix}${fontWeight} ${baseFontSize}px ${fontFace}`;
 
-            if (isHero) {
-              ctx.shadowColor = lGlowColor;
-              ctx.shadowBlur = lGlow * exportScale;
-              ctx.shadowOffsetX = 0;
-              ctx.shadowOffsetY = 0;
-            } else {
-              ctx.shadowColor = "rgba(0,0,0,0.8)";
-              ctx.shadowBlur = 3 * exportScale;
-              ctx.shadowOffsetX = 1 * exportScale;
-              ctx.shadowOffsetY = 1 * exportScale;
-            }
-
-            ctx.fillStyle = isHero ? lHeroColor : lMainColor;
-            ctx.fillText(tText, 0, 0);
-
-            ctx.shadowBlur = 0;
-            ctx.shadowOffsetX = 0;
-            ctx.shadowOffsetY = 0;
+            ctx.lineJoin = "round";
+            ctx.miterLimit = 2;
 
             if (lStrokeEnabled) {
               ctx.lineWidth = baseFontSize * (lStrokeWidth / 100);
               ctx.strokeStyle = lStrokeColor;
-              ctx.lineJoin = "round";
-              ctx.miterLimit = 2;
               ctx.strokeText(tText, 0, 0);
             }
+
+            // Glow color automatically matches the word's fill color; intensity 0 = no glow
+            const wordFillColor = isHero ? lHeroColor : lMainColor;
+            ctx.shadowColor = lGlow > 0 ? wordFillColor : "transparent";
+            ctx.shadowBlur = lGlow * exportScale;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+
+            ctx.fillStyle = wordFillColor;
+            ctx.fillText(tText, 0, 0);
 
             ctx.restore();
           };
@@ -432,21 +425,18 @@ export default function VideoCaptionerPage() {
             } else if (words.length === 2) {
               topWords = [words[0]];
               midWord = words[1];
-            } // ✅ FIXED
-            else if (words.length === 3) {
+            } else if (words.length === 3) {
               topWords = [words[0], words[1]];
               midWord = words[2];
-            } // ✅ FIXED
-            else if (words.length === 4) {
+            } else if (words.length === 4) {
               topWords = [words[0], words[1]];
               midWord = words[2];
               botWords = [words[3]];
-            } // ✅ FIXED
-            else {
+            } else {
               topWords = [words[0], words[1]];
               midWord = words[2];
               botWords = [words[3], words[4]];
-            } // ✅ FIXED
+            }
 
             const topScale = 0.45;
             const midScale = 1.8;
@@ -971,7 +961,6 @@ export default function VideoCaptionerPage() {
   const activeGlow = activeChunk?.style?.glow ?? glow;
   const activeMainColor = activeChunk?.style?.mainColor ?? mainColor;
   const activeHeroColor = activeChunk?.style?.heroColor ?? heroColor;
-  const activeGlowColor = activeChunk?.style?.glowColor ?? glowColor;
   const activeFontStyle = activeChunk?.style?.fontStyle ?? fontStyle;
   const activeAnimation = activeChunk?.style?.animation ?? animation;
   const activeLayout = activeChunk?.style?.layout ?? layout;
@@ -981,6 +970,11 @@ export default function VideoCaptionerPage() {
   const lStrokeWidth = activeChunk?.style?.strokeWidth ?? strokeWidth;
 
   const getActivePremiumFontStyles = () => {
+    // Use "currentColor" so each word's glow inherits its own text color automatically
+    // Glow intensity 0 = no glow (slider at 0 acts as off)
+    const glowShadow =
+      activeGlow > 0 ? `0 0 ${activeGlow}px currentColor` : "none";
+
     switch (activeFontStyle) {
       case "apple-premium":
         return {
@@ -989,7 +983,10 @@ export default function VideoCaptionerPage() {
           fontWeight: 900,
           textTransform: "none" as const,
           letterSpacing: "-0.04em",
-          textShadow: `0px 4px ${activeGlow}px ${activeGlowColor}, 0px 8px 32px rgba(0,0,0,0.5)`,
+          textShadow:
+            activeGlow > 0
+              ? `0px 4px ${activeGlow}px currentColor, 0px 8px 32px rgba(0,0,0,0.5)`
+              : "0px 8px 32px rgba(0,0,0,0.5)",
         };
       case "viral-impact":
         return {
@@ -1000,7 +997,7 @@ export default function VideoCaptionerPage() {
           WebkitTextStroke: lStrokeEnabled
             ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
             : "0px",
-          textShadow: `0.08em 0.08em 0px black, 0 0 ${activeGlow}px ${activeGlowColor}`,
+          textShadow: `0.08em 0.08em 0px black, ${glowShadow}`,
         };
       case "viral-italic":
         return {
@@ -1012,7 +1009,7 @@ export default function VideoCaptionerPage() {
           WebkitTextStroke: lStrokeEnabled
             ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
             : "0px",
-          textShadow: `0 0 ${activeGlow}px ${activeGlowColor}`,
+          textShadow: glowShadow,
         };
       case "cinematic":
         return {
@@ -1023,7 +1020,8 @@ export default function VideoCaptionerPage() {
           WebkitTextStroke: lStrokeEnabled
             ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
             : "0px",
-          textShadow: `0px 2px ${activeGlow}px ${activeGlowColor}`,
+          textShadow:
+            activeGlow > 0 ? `0px 2px ${activeGlow}px currentColor` : "none",
         };
       case "futura-bold":
         return {
@@ -1034,7 +1032,7 @@ export default function VideoCaptionerPage() {
           WebkitTextStroke: lStrokeEnabled
             ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
             : "0px",
-          textShadow: `2px 2px 0px black, 0 0 ${activeGlow}px ${activeGlowColor}`,
+          textShadow: `2px 2px 0px black, ${glowShadow}`,
         };
       case "roboto-clean":
         return {
@@ -1045,7 +1043,7 @@ export default function VideoCaptionerPage() {
           WebkitTextStroke: lStrokeEnabled
             ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
             : "0px",
-          textShadow: `1px 1px 4px rgba(0,0,0,0.8), 0 0 ${activeGlow}px ${activeGlowColor}`,
+          textShadow: `1px 1px 4px rgba(0,0,0,0.8), ${glowShadow}`,
         };
       case "gaming-bangers":
         return {
@@ -1056,7 +1054,7 @@ export default function VideoCaptionerPage() {
           WebkitTextStroke: lStrokeEnabled
             ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
             : "0px",
-          textShadow: `0.1em 0.1em 0px black, 0 0 ${activeGlow}px ${activeGlowColor}`,
+          textShadow: `0.1em 0.1em 0px black, ${glowShadow}`,
         };
       case "comic-quirky":
         return {
@@ -1067,7 +1065,7 @@ export default function VideoCaptionerPage() {
           WebkitTextStroke: lStrokeEnabled
             ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
             : "0px",
-          textShadow: `2px 2px 0px black, 0 0 ${activeGlow}px ${activeGlowColor}`,
+          textShadow: `2px 2px 0px black, ${glowShadow}`,
         };
       case "komika-axis":
         return {
@@ -1078,7 +1076,7 @@ export default function VideoCaptionerPage() {
           WebkitTextStroke: lStrokeEnabled
             ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
             : "0px",
-          textShadow: `0.1em 0.1em 0px black, 0 0 ${activeGlow}px ${activeGlowColor}`,
+          textShadow: `0.1em 0.1em 0px black, ${glowShadow}`,
         };
       default:
         return {
@@ -1089,7 +1087,7 @@ export default function VideoCaptionerPage() {
           WebkitTextStroke: lStrokeEnabled
             ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
             : "0px",
-          textShadow: `0 0 ${activeGlow}px ${activeGlowColor}`,
+          textShadow: glowShadow,
         };
     }
   };
@@ -1119,7 +1117,7 @@ export default function VideoCaptionerPage() {
                       <p className="text-sm font-medium">Running Locally</p>
                     </div>
                     <p className="text-xs text-teal-200/70 leading-relaxed">
-                      100% Private. Runs entirely on your device. Free Forever.
+                      100% Private. Runs your device. Free . 75MB
                     </p>
                   </div>
                 </div>
@@ -1133,15 +1131,13 @@ export default function VideoCaptionerPage() {
                     src={mediaSrc}
                     className="w-full h-auto max-h-[60vh] object-contain"
                   />
-                  <Button
-                    variant="destructive"
-                    size="icon"
+                  <button
                     onClick={clearMedia}
                     disabled={isProcessing}
-                    className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                    className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-red-600 flex items-center justify-center"
                   >
-                    <X className="h-4 w-4" />
-                  </Button>
+                    <X className="h-4 w-4 text-white" />
+                  </button>
                 </div>
               </div>
             )}
@@ -1324,9 +1320,10 @@ export default function VideoCaptionerPage() {
                                 isHero || lStrokeEnabled
                                   ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
                                   : "0px",
-                              textShadow: isHero
-                                ? textShadow
-                                : `1px 1px 3px rgba(0,0,0,0.8)`,
+                              textShadow:
+                                activeGlow > 0
+                                  ? `0 0 ${activeGlow}px currentColor`
+                                  : "none",
                             }}
                           >
                             {word}
@@ -1407,9 +1404,10 @@ export default function VideoCaptionerPage() {
                                   isHero || lStrokeEnabled
                                     ? `${lStrokeWidth * 0.01}em ${lStrokeColor}`
                                     : "0px",
-                                textShadow: isHero
-                                  ? textShadow
-                                  : "1px 1px 3px rgba(0,0,0,0.6)",
+                                textShadow:
+                                  activeGlow > 0
+                                    ? `0 0 ${activeGlow}px currentColor`
+                                    : "none",
                               }}
                             >
                               {word}
@@ -1481,7 +1479,7 @@ export default function VideoCaptionerPage() {
           </div>
         </div>
 
-        {/* 🌟 RIGHT COLUMN: STYLE LAB 🌟 */}
+        {/* RIGHT COLUMN: STYLE LAB */}
         <div
           className={`h-[55%] lg:h-full w-full lg:w-112.5 shrink-0 flex flex-col p-4 sm:p-6 lg:p-8 overflow-y-auto scrollbar-hide bg-black/40 backdrop-blur-xl border-l border-white/5 z-10 shadow-2xl relative ${isExporting ? "opacity-50 pointer-events-none" : ""}`}
         >
@@ -1519,7 +1517,6 @@ export default function VideoCaptionerPage() {
             </div>
           )}
 
-          {/* 🌟 COMPACT 3-COLUMN DROPDOWNS 🌟 */}
           <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-8">
             <div>
               <Label className="text-[9px] sm:text-[10px] text-gray-400 uppercase tracking-wider mb-1.5 block truncate">
@@ -1586,7 +1583,6 @@ export default function VideoCaptionerPage() {
             </div>
           </div>
 
-          {/* Adjustments Panel */}
           <div className="bg-black/40 border border-white/10 rounded-xl p-4 lg:p-5 mb-8 shadow-inner">
             <div className="flex items-center gap-2 text-[9px] lg:text-[10px] text-gray-400 uppercase tracking-widest font-semibold mb-4 lg:mb-6">
               <Settings2 className="w-3 h-3" /> Adjustments
@@ -1685,11 +1681,26 @@ export default function VideoCaptionerPage() {
                   className="**:data-radix-slider-range:bg-teal-500 **:[[role=slider]]:bg-white **:[[role=slider]]:border-teal-500"
                 />
               </div>
+
+              {/* NEW: Glow Intensity slider — full width, spanning both columns */}
+              <div className="col-span-2 flex flex-col gap-1.5">
+                <div className="flex justify-between text-[10px] lg:text-xs font-semibold text-teal-400">
+                  <span>Glow Intensity</span>
+                  <span>{getActiveStyle("glow", glow)}px</span>
+                </div>
+                <Slider
+                  min={0}
+                  max={60}
+                  value={[getActiveStyle("glow", glow)]}
+                  onValueChange={(v) => applyStyle("glow", v[0], setGlow)}
+                  className="**:data-radix-slider-range:bg-teal-500 **:[[role=slider]]:bg-white **:[[role=slider]]:border-teal-500"
+                />
+              </div>
             </div>
           </div>
 
-          {/* Color Pickers */}
-          <div className="grid grid-cols-4 gap-2 sm:gap-3 mb-8">
+          {/* Color pickers: Main, Hero, Outline toggle */}
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-8">
             <div>
               <Label className="text-[9px] sm:text-[10px] text-gray-400 font-semibold mb-1.5 block truncate">
                 Main
@@ -1750,24 +1761,8 @@ export default function VideoCaptionerPage() {
                 />
               </div>
             </div>
-            <div>
-              <Label className="text-[9px] sm:text-[10px] text-gray-400 font-semibold mb-1.5 block truncate">
-                Shadow
-              </Label>
-              <div className="relative w-full h-8 sm:h-10 rounded overflow-hidden border border-white/20 shadow-md cursor-pointer hover:border-white/40 transition">
-                <input
-                  type="color"
-                  value={getActiveStyle("glowColor", glowColor)}
-                  onChange={(e) =>
-                    applyStyle("glowColor", e.target.value, setGlowColor)
-                  }
-                  className="absolute inset-0 w-[150%] h-[150%] -translate-x-4 -translate-y-4 cursor-pointer"
-                />
-              </div>
-            </div>
           </div>
 
-          {/* 🌟 TRANSCRIPT EDITING SECTION 🌟 */}
           <div className="grow flex flex-col min-h-50 lg:min-h-62.5 relative">
             <div className="flex justify-between items-center mb-3 lg:mb-4">
               <h3 className="text-xs lg:text-sm font-semibold text-gray-200 flex items-center gap-2">
@@ -1799,58 +1794,63 @@ export default function VideoCaptionerPage() {
               ref={transcriptRef}
               className="relative grow overflow-y-auto space-y-2 pr-2 scrollbar-thin scrollbar-thumb-gray-700 border border-white/10 rounded-xl p-2 bg-black/40"
             >
-              {transcript.chunks?.map((chunk, index) => {
-                const isSelected = index === selectedChunkIndex;
-                const isActive = index === activeChunkIndex && !isEditing;
+              {transcript.chunks?.map(
+                (chunk: TranscriptChunk, index: number) => {
+                  const isSelected = index === selectedChunkIndex;
+                  const isActive = index === activeChunkIndex && !isEditing;
 
-                return (
-                  <div
-                    key={index}
-                    onClick={() => {
-                      if (!isEditing) {
-                        setSelectedChunkIndex(index);
-                        handleSeek([chunk.timestamp[0]]);
-                      }
-                    }}
-                    className={`flex gap-3 lg:gap-4 p-2 lg:p-3 rounded-lg transition-all ${
-                      isEditing
-                        ? "bg-black/50 border border-white/10"
-                        : isSelected
-                          ? "bg-purple-500/20 border border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.15)] cursor-pointer"
-                          : isActive
-                            ? "bg-teal-500/10 border border-teal-500/50 cursor-pointer"
-                            : "bg-transparent border border-transparent hover:bg-white/5 cursor-pointer"
-                    }`}
-                  >
-                    <span
-                      className={`text-[9px] lg:text-[10px] font-mono mt-1 w-6 lg:w-8 shrink-0 ${isSelected ? "text-purple-400" : isActive ? "text-teal-400" : "text-gray-500"}`}
+                  return (
+                    <div
+                      key={index}
+                      onClick={() => {
+                        if (!isEditing) {
+                          setSelectedChunkIndex(index);
+                          handleSeek([chunk.timestamp[0]]);
+                        }
+                      }}
+                      className={`flex gap-3 lg:gap-4 p-2 lg:p-3 rounded-lg transition-all ${
+                        isEditing
+                          ? "bg-black/50 border border-white/10"
+                          : isSelected
+                            ? "bg-purple-500/20 border border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.15)] cursor-pointer"
+                            : isActive
+                              ? "bg-teal-500/10 border border-teal-500/50 cursor-pointer"
+                              : "bg-transparent border border-transparent hover:bg-white/5 cursor-pointer"
+                      }`}
                     >
-                      {chunk.timestamp[0].toFixed(1)}s
-                    </span>
-
-                    {isEditing ? (
-                      <textarea
-                        value={chunk.text}
-                        onChange={(e) => handleChunkEdit(index, e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, index)}
-                        className="w-full bg-black/40 text-xs lg:text-sm text-white border border-white/10 rounded-md p-2 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all resize-none overflow-hidden transcript-textarea"
-                        rows={2}
-                      />
-                    ) : (
-                      <p
-                        className={`text-xs lg:text-sm ${isSelected || isActive ? "text-white" : "text-gray-400"}`}
+                      <span
+                        className={`text-[9px] lg:text-[10px] font-mono mt-1 w-6 lg:w-8 shrink-0 ${isSelected ? "text-purple-400" : isActive ? "text-teal-400" : "text-gray-500"}`}
                       >
-                        {chunk.text}
-                        {chunk.style && Object.keys(chunk.style).length > 0 && (
-                          <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[7px] lg:text-[8px] font-bold bg-purple-500/30 text-purple-300">
-                            STYLED
-                          </span>
-                        )}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
+                        {chunk.timestamp[0].toFixed(1)}s
+                      </span>
+
+                      {isEditing ? (
+                        <textarea
+                          value={chunk.text}
+                          onChange={(e) =>
+                            handleChunkEdit(index, e.target.value)
+                          }
+                          onKeyDown={(e) => handleKeyDown(e, index)}
+                          className="w-full bg-black/40 text-xs lg:text-sm text-white border border-white/10 rounded-md p-2 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all resize-none overflow-hidden transcript-textarea"
+                          rows={2}
+                        />
+                      ) : (
+                        <p
+                          className={`text-xs lg:text-sm ${isSelected || isActive ? "text-white" : "text-gray-400"}`}
+                        >
+                          {chunk.text}
+                          {chunk.style &&
+                            Object.keys(chunk.style).length > 0 && (
+                              <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[7px] lg:text-[8px] font-bold bg-purple-500/30 text-purple-300">
+                                STYLED
+                              </span>
+                            )}
+                        </p>
+                      )}
+                    </div>
+                  );
+                },
+              )}
             </div>
           </div>
         </div>

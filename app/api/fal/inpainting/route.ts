@@ -26,8 +26,10 @@ export async function POST(req: Request) {
     // 2. Configuration
     const hasMask = !!input.mask_url;
     const hasReference = !!input.reference_image_url;
-    const targetModelId = "fal-ai/nano-banana-pro/edit";
-    const cost = 15;
+    //const targetModelId = "fal-ai/nano-banana-pro/edit";
+    //const cost = 15;
+    const targetModelId = "fal-ai/nano-banana-2/edit";
+    const cost = 10;
 
     // 3. Check Credits
     const [user] = await db

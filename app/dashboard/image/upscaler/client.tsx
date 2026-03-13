@@ -180,7 +180,7 @@ interface GenerationJob {
 // ✅ Removed Clarity Upscaler
 const availableModels: AvailableModel[] = [
   {
-    id: "fal-ai/nano-banana-pro/edit",
+    id: "fal-ai/nano-banana-2/edit",
     name: "Deepshark Upscaler",
     iconPath: "/logo.webp",
     supportsUpscalingLevels: true,
@@ -253,7 +253,7 @@ const ImageUpscalerPage = () => {
       upscaleLevels.find((r) => r.id === upscaleLevel) || upscaleLevels[0];
     const is4K = currentUpscaleSetting.value >= 4;
 
-    if (selectedModel === "fal-ai/nano-banana-pro/edit") return is4K ? 30 : 15;
+    if (selectedModel === "fal-ai/nano-banana-2/edit") return is4K ? 20 : 10;
     if (selectedModel === "fal-ai/topaz/upscale/image") return is4K ? 12 : 8;
 
     return 10; // Fallback

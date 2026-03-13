@@ -41,11 +41,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 
 // --- CONSTANTS ---
-const COINS_PER_DOLLAR = 40;
+const COINS_PER_DOLLAR = 35;
 const MIN_CUSTOM_TOP_UP_USD = 5;
 
 // --- SUBSCRIPTION DATA ---
-const SUBSCRIPTION_PLANS = [
+const MONTHLY_PLANS = [
   {
     id: "starter",
     name: "Starter",
@@ -90,6 +90,51 @@ const SUBSCRIPTION_PLANS = [
   },
 ];
 
+const YEARLY_PLANS = [
+  {
+    id: "starter_yearly",
+    name: "Starter",
+    priceUSD: 97, // 10% off $108
+    credits: 4800,
+    features: [
+      "4,800 Credits UPFRONT",
+      "Generate up to 6,000 images (Flux)",
+      "Or upscale ~720 images to 4K",
+      "Or perform ~360 Magic Edits",
+      "Credits never expire",
+    ],
+    popular: false,
+  },
+  {
+    id: "pro_yearly",
+    name: "Pro",
+    priceUSD: 313, // 10% off $348
+    credits: 18000,
+    features: [
+      "18,000 Credits UPFRONT",
+      "Generate up to 18,000 images (Flux)",
+      "Or upscale ~2,244 images to 4K",
+      "Priority generation queue",
+      "Rollover unused credits",
+    ],
+    popular: true,
+  },
+  {
+    id: "elite_yearly",
+    name: "Elite",
+    priceUSD: 853, // 10% off $948
+    credits: 50400,
+    features: [
+      "50,400 Credits UPFRONT",
+      "Generate up to 50,400 images (Flux)",
+      "Or upscale ~6,300 images to 4K",
+      "Private Mode & API Access",
+      "Dedicated VIP support",
+    ],
+    popular: false,
+  },
+];
+
 const BillingPage = () => {
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -104,17 +149,16 @@ const BillingPage = () => {
   );
   const [isProcessing, setIsProcessing] = useState(false);
   const [subscribingId, setSubscribingId] = useState<string | null>(null);
-  const [billingMode, setBillingMode] = useState<"one-time" | "subscription">(
-    "one-time",
-  );
+  const [billingMode, setBillingMode] = useState<
+    "one-time" | "monthly" | "yearly"
+  >("one-time");
   const [activeSubscription, setActiveSubscription] = useState<any>(null);
-  const [isIndia, setIsIndia] = useState(false); // New state just for the UI badge
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
-  // --- Fetch Data, Subscription Status & Location ---
+  // --- Fetch Data & Subscription Status ---
   useEffect(() => {
     async function loadData() {
       if (isLoggedIn) {
@@ -125,7 +169,9 @@ const BillingPage = () => {
           const profile = await getUserProfile();
           if (profile?.subscription?.status === "active") {
             setActiveSubscription(profile.subscription);
-            setBillingMode("subscription");
+            // Auto-select the right tab based on active plan
+            const isYearly = profile.subscription.planId?.includes("_yearly");
+            setBillingMode(isYearly ? "yearly" : "monthly");
           }
         } catch (e) {
           console.error("Failed to load profile", e);
@@ -133,14 +179,6 @@ const BillingPage = () => {
       }
       setLoadingHistory(false);
     }
-
-    // Lightweight check just to see if we should show the UPI logo
-    fetch("https://ipapi.co/json/")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.country_code === "IN") setIsIndia(true);
-      })
-      .catch((err) => console.error("Location fetch failed", err));
 
     loadData();
   }, [isLoggedIn, currentCoins]);
@@ -158,7 +196,7 @@ const BillingPage = () => {
     return transactions.slice(start, start + itemsPerPage);
   }, [currentPage, transactions]);
 
-  // --- HANDLER: Dodo One-Time Payment ---
+  // --- HANDLER: Polar One-Time Payment ---
   const handleOneTimePayment = async () => {
     const val = parseFloat(amount);
     if (isNaN(val) || val < MIN_CUSTOM_TOP_UP_USD) {
@@ -168,10 +206,13 @@ const BillingPage = () => {
 
     setIsProcessing(true);
     try {
-      const res = await fetch("/api/dodo/create-payment", {
+      const res = await fetch("/api/polar/create-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ coins: calculatedCoins }),
+        body: JSON.stringify({
+          amount: val,
+          coins: calculatedCoins,
+        }),
       });
 
       const data = await res.json();
@@ -185,7 +226,7 @@ const BillingPage = () => {
     }
   };
 
-  // --- HANDLER: Dodo Subscription ---
+  // --- HANDLER: Polar Subscription ---
   const handleSubscription = async (planId: string) => {
     if (activeSubscription) {
       toast.error("You already have an active subscription!");
@@ -194,7 +235,7 @@ const BillingPage = () => {
 
     setSubscribingId(planId);
     try {
-      const res = await fetch("/api/dodo/create-subscription", {
+      const res = await fetch("/api/polar/create-subscription", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ planId }),
@@ -210,6 +251,128 @@ const BillingPage = () => {
       setSubscribingId(null);
     }
   };
+
+  // --- Shared plan card renderer ---
+  const renderPlanCards = (plans: typeof MONTHLY_PLANS, isYearly = false) => (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+      {plans.map((plan) => (
+        <Card
+          key={plan.id}
+          className={`bg-slate-900/50 border flex flex-col relative ${
+            plan.popular
+              ? "border-teal-500/50 shadow-[0_0_30px_-10px_rgba(20,184,166,0.3)] bg-slate-900/80 scale-100 md:scale-105 z-10"
+              : "border-white/10 hover:border-white/20"
+          }`}
+        >
+          {plan.popular && (
+            <div className="absolute -top-4 left-0 right-0 flex justify-center">
+              <div className="bg-gradient-to-r from-teal-500 to-cyan-500 text-black text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow-lg">
+                <Sparkles className="w-3 h-3" /> Most Popular
+              </div>
+            </div>
+          )}
+          <CardHeader className="text-center pb-4 pt-8">
+            <CardTitle className="text-xl font-bold text-white">
+              {plan.name}
+            </CardTitle>
+            <div className="flex items-center justify-center gap-1 mt-2">
+              <span className="text-3xl font-bold text-white">
+                $
+                {isYearly
+                  ? (plan as (typeof YEARLY_PLANS)[0]).priceUSD
+                  : plan.priceUSD}
+              </span>
+              <span className="text-gray-500 text-sm font-medium">
+                {isYearly ? "/yr" : "/mo"}
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent className="flex-grow space-y-6">
+            <div className="text-center bg-white/5 rounded-lg py-3 border border-white/5">
+              <p className="text-teal-400 font-bold text-lg flex items-center justify-center gap-2">
+                <Coins className="w-5 h-5" /> {plan.credits.toLocaleString()}{" "}
+                Credits
+              </p>
+            </div>
+            <ul className="space-y-3">
+              {plan.features.map((feature, idx) => (
+                <li
+                  key={idx}
+                  className="flex items-start gap-3 text-sm text-gray-300"
+                >
+                  <Check className="w-4 h-4 text-teal-500 flex-shrink-0 mt-0.5" />
+                  <span>{feature}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+          <CardFooter className="flex-col">
+            {!isLoggedIn ? (
+              <AuthModal
+                trigger={
+                  <Button
+                    className={`w-full h-11 font-semibold flex items-center justify-center gap-2 ${
+                      plan.popular
+                        ? "bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white shadow-lg"
+                        : "bg-white/10 hover:bg-white/20 text-white"
+                    }`}
+                  >
+                    <LogIn className="h-4 w-4" /> Login to Subscribe
+                  </Button>
+                }
+              />
+            ) : (
+              <div className="w-full">
+                {activeSubscription ? (
+                  <div className="w-full text-center">
+                    {activeSubscription.planId === plan.id ? (
+                      <Button
+                        disabled
+                        className="w-full bg-green-500/20 text-green-400 border border-green-500/50 cursor-not-allowed"
+                      >
+                        <Check className="mr-2 h-4 w-4" /> Current Plan
+                      </Button>
+                    ) : (
+                      <Button
+                        disabled
+                        className="w-full bg-white/5 text-gray-400 border border-white/10 cursor-not-allowed"
+                      >
+                        Already Subscribed
+                      </Button>
+                    )}
+                    <Link
+                      href="/dashboard/profile"
+                      className="text-[10px] text-gray-500 mt-2 hover:text-gray-300 hover:underline cursor-pointer block"
+                    >
+                      Manage in Profile
+                    </Link>
+                  </div>
+                ) : (
+                  <Button
+                    onClick={() => handleSubscription(plan.id)}
+                    disabled={subscribingId === plan.id}
+                    className={`w-full h-11 font-semibold flex items-center justify-center gap-2 ${
+                      plan.popular
+                        ? "bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white shadow-lg"
+                        : "bg-white/10 hover:bg-white/20 text-white"
+                    }`}
+                  >
+                    {subscribingId === plan.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        <Zap className="h-4 w-4 fill-current" /> Subscribe Now
+                      </span>
+                    )}
+                  </Button>
+                )}
+              </div>
+            )}
+          </CardFooter>
+        </Card>
+      ))}
+    </div>
+  );
 
   return (
     <div className="space-y-8 md:space-y-12 px-3 py-6 md:px-6 md:py-8 w-full max-w-6xl mx-auto">
@@ -233,11 +396,11 @@ const BillingPage = () => {
 
       {/* --- TOGGLE SWITCH --- */}
       <div className="flex justify-center mb-6 md:mb-8">
-        <div className="bg-slate-900/80 backdrop-blur-md border border-white/10 p-1 rounded-full flex items-center shadow-2xl relative w-full max-w-[300px] md:max-w-[340px]">
+        <div className="bg-slate-900/80 backdrop-blur-md border border-white/10 p-1 rounded-full flex items-center shadow-2xl relative w-full max-w-[420px] md:max-w-[460px]">
           <div className="flex relative z-10 w-full">
             <button
               onClick={() => setBillingMode("one-time")}
-              className={`flex-1 px-4 py-2 md:px-6 rounded-full text-xs md:text-sm font-medium transition-all duration-300 whitespace-nowrap ${
+              className={`flex-1 px-3 py-2 md:px-5 rounded-full text-xs md:text-sm font-medium transition-all duration-300 whitespace-nowrap ${
                 billingMode === "one-time"
                   ? "bg-teal-600 text-white shadow-md"
                   : "text-gray-400 hover:text-white"
@@ -246,16 +409,26 @@ const BillingPage = () => {
               Pay as you go
             </button>
             <button
-              onClick={() => setBillingMode("subscription")}
-              className={`flex-1 px-4 py-2 md:px-6 rounded-full text-xs md:text-sm font-medium transition-all duration-300 flex items-center justify-center gap-1.5 md:gap-2 whitespace-nowrap ${
-                billingMode === "subscription"
+              onClick={() => setBillingMode("monthly")}
+              className={`flex-1 px-3 py-2 md:px-5 rounded-full text-xs md:text-sm font-medium transition-all duration-300 whitespace-nowrap ${
+                billingMode === "monthly"
                   ? "bg-teal-600 text-white shadow-md"
                   : "text-gray-400 hover:text-white"
               }`}
             >
-              Subscription
+              Monthly
+            </button>
+            <button
+              onClick={() => setBillingMode("yearly")}
+              className={`flex-1 px-3 py-2 md:px-5 rounded-full text-xs md:text-sm font-medium transition-all duration-300 flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                billingMode === "yearly"
+                  ? "bg-teal-600 text-white shadow-md"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Yearly
               <span className="text-[9px] md:text-[10px] bg-teal-800 text-teal-100 px-1.5 py-0.5 rounded-full border border-teal-500/30">
-                -20%
+                1 Month Free
               </span>
             </button>
           </div>
@@ -326,20 +499,13 @@ const BillingPage = () => {
                     ) : (
                       <span className="flex items-center gap-2">
                         Continue to Checkout
-                        {isIndia && (
-                          <img
-                            src="/icons/UPI-Logo.png"
-                            alt="UPI"
-                            className="h-5 object-contain"
-                          />
-                        )}
                       </span>
                     )}
                   </Button>
                 )}
                 <p className="text-[10px] md:text-xs text-gray-500 mt-3 text-center flex flex-col items-center">
                   <span>
-                    Secure global checkout. Minimum purchase $
+                    Secure global checkout via Polar. Minimum purchase $
                     {MIN_CUSTOM_TOP_UP_USD}.
                   </span>
                 </p>
@@ -348,132 +514,11 @@ const BillingPage = () => {
           </div>
         )}
 
-        {/* VIEW 2: SUBSCRIPTION PLANS */}
-        {billingMode === "subscription" && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            {SUBSCRIPTION_PLANS.map((plan) => (
-              <Card
-                key={plan.id}
-                className={`bg-slate-900/50 border flex flex-col relative ${
-                  plan.popular
-                    ? "border-teal-500/50 shadow-[0_0_30px_-10px_rgba(20,184,166,0.3)] bg-slate-900/80 scale-100 md:scale-105 z-10"
-                    : "border-white/10 hover:border-white/20"
-                }`}
-              >
-                {plan.popular && (
-                  <div className="absolute -top-4 left-0 right-0 flex justify-center">
-                    <div className="bg-gradient-to-r from-teal-500 to-cyan-500 text-black text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow-lg">
-                      <Sparkles className="w-3 h-3" /> Most Popular
-                    </div>
-                  </div>
-                )}
-                <CardHeader className="text-center pb-4 pt-8">
-                  <CardTitle className="text-xl font-bold text-white">
-                    {plan.name}
-                  </CardTitle>
-                  <div className="flex items-center justify-center gap-1 mt-2">
-                    <span className="text-3xl font-bold text-white">
-                      ${plan.priceUSD}
-                    </span>
-                    <span className="text-gray-500 text-sm font-medium">
-                      /mo
-                    </span>
-                  </div>
-                </CardHeader>
-                <CardContent className="flex-grow space-y-6">
-                  <div className="text-center bg-white/5 rounded-lg py-3 border border-white/5">
-                    <p className="text-teal-400 font-bold text-lg flex items-center justify-center gap-2">
-                      <Coins className="w-5 h-5" />{" "}
-                      {plan.credits.toLocaleString()} Credits
-                    </p>
-                  </div>
-                  <ul className="space-y-3">
-                    {plan.features.map((feature, idx) => (
-                      <li
-                        key={idx}
-                        className="flex items-start gap-3 text-sm text-gray-300"
-                      >
-                        <Check className="w-4 h-4 text-teal-500 flex-shrink-0 mt-0.5" />
-                        <span>{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-                <CardFooter className="flex-col">
-                  {!isLoggedIn ? (
-                    <AuthModal
-                      trigger={
-                        <Button
-                          className={`w-full h-11 font-semibold flex items-center justify-center gap-2 ${
-                            plan.popular
-                              ? "bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white shadow-lg"
-                              : "bg-white/10 hover:bg-white/20 text-white"
-                          }`}
-                        >
-                          <LogIn className="h-4 w-4" /> Login to Subscribe
-                        </Button>
-                      }
-                    />
-                  ) : (
-                    <div className="w-full">
-                      {activeSubscription ? (
-                        <div className="w-full text-center">
-                          {activeSubscription.planId === plan.id ? (
-                            <Button
-                              disabled
-                              className="w-full bg-green-500/20 text-green-400 border border-green-500/50 cursor-not-allowed"
-                            >
-                              <Check className="mr-2 h-4 w-4" /> Current Plan
-                            </Button>
-                          ) : (
-                            <Button
-                              disabled
-                              className="w-full bg-white/5 text-gray-400 border border-white/10 cursor-not-allowed"
-                            >
-                              Already Subscribed
-                            </Button>
-                          )}
-                          <Link
-                            href="/dashboard/profile"
-                            className="text-[10px] text-gray-500 mt-2 hover:text-gray-300 hover:underline cursor-pointer block"
-                          >
-                            Manage in Profile
-                          </Link>
-                        </div>
-                      ) : (
-                        <Button
-                          onClick={() => handleSubscription(plan.id)}
-                          disabled={subscribingId === plan.id}
-                          className={`w-full h-11 font-semibold flex items-center justify-center gap-2 ${
-                            plan.popular
-                              ? "bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white shadow-lg"
-                              : "bg-white/10 hover:bg-white/20 text-white"
-                          }`}
-                        >
-                          {subscribingId === plan.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <span className="flex items-center gap-2">
-                              <Zap className="h-4 w-4 fill-current" /> Subscribe
-                              Now
-                              {isIndia && (
-                                <img
-                                  src="/icons/UPI-Logo.png"
-                                  alt="UPI"
-                                  className="h-4 object-contain bg-white/10 px-1 py-0.5 rounded-sm"
-                                />
-                              )}
-                            </span>
-                          )}
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </CardFooter>
-              </Card>
-            ))}
-          </div>
-        )}
+        {/* VIEW 2: MONTHLY PLANS */}
+        {billingMode === "monthly" && renderPlanCards(MONTHLY_PLANS, false)}
+
+        {/* VIEW 3: YEARLY PLANS */}
+        {billingMode === "yearly" && renderPlanCards(YEARLY_PLANS, true)}
       </div>
 
       {/* --- TRANSACTION HISTORY --- */}
@@ -535,10 +580,9 @@ const BillingPage = () => {
                             : "-"}
                         </TableCell>
 
-                        {/* ✅ FIX 1: Show correct type based on the provider string */}
                         <TableCell className="text-gray-200 capitalize text-xs">
                           {txn.amount <= 0
-                            ? "Usage"
+                            ? "Top Up"
                             : txn.provider?.includes("subscription")
                               ? "Subscription"
                               : "Credit Top-Up"}
@@ -551,7 +595,6 @@ const BillingPage = () => {
                           {txn.credits}
                         </TableCell>
 
-                        {/* ✅ FIX 2: Show the correct currency symbol (₹, $, €, etc.) */}
                         <TableCell className="text-right text-gray-400 text-xs">
                           {txn.amount > 0
                             ? new Intl.NumberFormat("en-US", {

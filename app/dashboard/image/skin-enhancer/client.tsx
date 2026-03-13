@@ -190,7 +190,7 @@ const SkinEnhancerPage = () => {
     }
 
     setIsLoading(true);
-    toast.info(`Enhancing... (Cost: 30 coins)`);
+    toast.info(`Enhancing... (Cost: 20 coins)`);
 
     const newJobId = `job-${Date.now()}`;
     setActiveJobs([
@@ -515,7 +515,7 @@ const SkinEnhancerPage = () => {
                 ) : (
                   <>
                     <span className="text-xs font-semibold whitespace-nowrap">
-                      30
+                      20
                     </span>
                     <Coins className="w-3.5 h-3.5" />
                   </>

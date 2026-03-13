@@ -42,11 +42,11 @@ const LandingPage = () => {
       {/* Layer Explosion Hero */}
       <LayerExplosionHero />
 
+      <CaptionGeneratorInteractiveHero />
+
       <UpscalerScrollHero />
 
       <BgRemoverInteractiveHero />
-
-      <CaptionGeneratorInteractiveHero />
 
       <SkinEnhancerInteractiveHero />
 

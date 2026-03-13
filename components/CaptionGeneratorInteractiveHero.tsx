@@ -18,8 +18,9 @@ export default function CaptionGeneratorHero() {
       className="py-24 relative w-full overflow-hidden bg-slate-950 flex flex-col items-center justify-center px-4 md:px-6"
     >
       {/* Background Gradients */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-teal-900/20 via-slate-950 to-slate-950 -z-10" />
+      <div className="absolute inset-0 hero-gradient z-10"></div>
       <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-slate-950 via-slate-950/50 to-transparent z-20 pointer-events-none"></div>
+      <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-slate-950 to-transparent z-20"></div>
 
       {/* 🌟 HEADER TEXT 🌟 */}
       <div className="flex flex-col items-center text-center z-30 mb-10 max-w-2xl mx-auto">
@@ -59,7 +60,7 @@ export default function CaptionGeneratorHero() {
       <div className="text-center mt-12 z-30">
         <Link href="/dashboard/video/caption">
           <Button className="h-12 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-black px-8 rounded-full shadow-[0_0_20px_rgba(20,184,166,0.3)] transition-all hover:scale-105 font-bold text-base">
-            Try Caption Generator <ArrowRight className="ml-2 h-5 w-5" />
+            Try Captioner Free Forever <ArrowRight className="ml-2 h-5 w-5" />
           </Button>
         </Link>
       </div>

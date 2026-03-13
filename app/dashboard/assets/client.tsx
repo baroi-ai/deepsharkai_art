@@ -204,7 +204,7 @@ const MyGenerationsPage = () => {
       <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
         <div className="w-full md:w-auto text-center md:text-left">
           <h1 className="text-2xl md:text-4xl font-bold flex items-center justify-center md:justify-start gap-3">
-            <LayoutGrid className="h-6 w-6 md:h-8 md:w-8 text-cyan-500" /> My
+            <LayoutGrid className="h-6 w-6 md:h-8 md:w-8 text-teal-500" /> My
             Assets
           </h1>
         </div>
@@ -215,7 +215,7 @@ const MyGenerationsPage = () => {
             placeholder="Search prompt..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-10 bg-black/40 border-white/10 text-white focus-visible:ring-cyan-500 rounded-full h-10 md:h-11 backdrop-blur-md text-sm"
+            className="w-full pl-10 pr-10 bg-black/40 border-white/10 text-white focus-visible:ring-teal-500 rounded-full h-10 md:h-11 backdrop-blur-md text-sm"
           />
           <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
           {searchQuery && (
@@ -246,7 +246,7 @@ const MyGenerationsPage = () => {
             {displayedItems.map((item) => (
               <div
                 key={item.id}
-                className="break-inside-avoid mb-2 md:mb-4 group relative bg-gray-900 rounded-lg md:rounded-xl overflow-hidden hover:shadow-2xl hover:shadow-cyan-900/20 transition-all duration-300 border border-white/5"
+                className="break-inside-avoid mb-2 md:mb-4 group relative bg-gray-900 rounded-lg md:rounded-xl overflow-hidden hover:shadow-2xl hover:shadow-teal-900/20 transition-all duration-300 border border-white/5"
               >
                 <div
                   className="cursor-zoom-in relative w-full"
@@ -307,7 +307,7 @@ const MyGenerationsPage = () => {
         {/* --- LOAD MORE BUTTON --- */}
         <div className="py-8 md:py-12 flex justify-center w-full">
           {isLoadingInitial || isLoadingMore ? (
-            <Loader2 className="h-8 w-8 animate-spin text-cyan-500" />
+            <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
           ) : hasMore && displayedItems.length > 0 ? (
             <Button
               variant="outline"
@@ -347,7 +347,7 @@ const MyGenerationsPage = () => {
 
                 <div className="flex-grow p-4 md:p-6 overflow-y-auto space-y-4 md:space-y-6">
                   <div className="space-y-2">
-                    <h4 className="text-xs font-semibold text-cyan-500 uppercase tracking-widest flex items-center gap-2">
+                    <h4 className="text-xs font-semibold text-teal-500 uppercase tracking-widest flex items-center gap-2">
                       <FileText className="h-3 w-3" /> Prompt
                     </h4>
                     <div className="text-xs md:text-sm leading-relaxed text-gray-300 font-light max-h-[150px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700">
@@ -393,7 +393,7 @@ const MyGenerationsPage = () => {
                     <Trash2 className="mr-2 h-4 w-4" /> Delete
                   </Button>
                   <Button
-                    className="flex-1 bg-gradient-to-r from-cyan-500 to-teal-500 text-white hover:from-cyan-600 hover:to-teal-600 border-none h-10 md:h-11 shadow-lg transition-all hover:shadow-cyan-500/20"
+                    className="flex-1 bg-gradient-to-r from-cyan-500 to-teal-500 text-white hover:from-teal-600 hover:to-teal-600 border-none h-10 md:h-11 shadow-lg transition-all hover:shadow-teal-500/20"
                     onClick={() => handleDownload(selectedItem)}
                     disabled={isDownloading[selectedItem.id]}
                   >

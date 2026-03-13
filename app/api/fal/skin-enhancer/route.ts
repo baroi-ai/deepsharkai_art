@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     const userId = session.user.id;
     const { input } = await req.json();
 
-    const cost = 30;
+    const cost = 20;
 
     // 2. Check Credits
     const [user] = await db
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
     // Assemble the ultimate photorealism prompt
     const finalPrompt = `raw unedited portrait photography, extreme hyper-realistic skin texture, visible pores, micro-details, subsurface scattering, dslr 85mm lens, sharp focus, exactly same face identity, no airbrushing, no smoothing${additionsString}, highly detailed, 8k resolution`;
 
-    const targetModelId = "fal-ai/nano-banana-pro/edit"; //fal-ai/flux-2/klein/9b/edit
+    const targetModelId = "fal-ai/nano-banana-2/edit"; //fal-ai/flux-2/klein/9b/edit
     const falInput = {
       prompt: finalPrompt,
       image_urls: [sourceImageUrl],
@@ -75,7 +75,7 @@ export async function POST(req: Request) {
       output_format: "jpeg",
       resolution: "2K",
       safety_checker: true,
-      strength: input.strength ?? 0.35, // ✅ Accepts the custom strength from the UI!
+      strength: input.strength ?? 0.1, // ✅ Accepts the custom strength from the UI!
     };
 
     console.log(
@@ -115,7 +115,7 @@ export async function POST(req: Request) {
         id: generationId,
         userId: userId,
         prompt: `Skin Enhance - Strength: ${falInput.strength}`,
-        model: "Nano Banana Pro Skin",
+        model: "DeepShark Skin",
         imageUrl: remoteImageUrl,
         fallbackUrl: remoteImageUrl,
         cost: cost,

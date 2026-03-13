@@ -14,7 +14,8 @@ fal.config({
 
 // ✅ Removed Clarity Upscaler
 const ALLOWED_MODELS = new Set([
-  "fal-ai/nano-banana-pro/edit",
+  //"fal-ai/nano-banana-pro/edit",
+  "fal-ai/nano-banana-2/edit",
   "fal-ai/topaz/upscale/image",
 ]);
 
@@ -36,8 +37,8 @@ export async function POST(req: Request) {
     const is4K = requestedScale >= 4;
     let cost = 10; // Fallback
 
-    if (modelId === "fal-ai/nano-banana-pro/edit") {
-      cost = is4K ? 30 : 15;
+    if (modelId === "fal-ai/nano-banana-2/edit") {
+      cost = is4K ? 20 : 10;
     } else if (modelId === "fal-ai/topaz/upscale/image") {
       cost = is4K ? 12 : 8;
     }
@@ -65,7 +66,7 @@ export async function POST(req: Request) {
 
     // Input mapping logic
     switch (modelId) {
-      case "fal-ai/nano-banana-pro/edit":
+      case "fal-ai/nano-banana-2/edit":
         friendlyModelName = "Deepshark Upscaler";
         const resolution = is4K ? "4K" : "2K";
         falInput = {

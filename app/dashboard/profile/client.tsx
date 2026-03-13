@@ -129,7 +129,7 @@ const ProfilePage = () => {
     setIsCancellingSub(true);
     try {
       // 2. Call the Dodo cancellation API we built
-      const res = await fetch("/api/dodo/cancel-subscription", {
+      const res = await fetch("/api/polar/cancel-subscription", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
