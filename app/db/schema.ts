@@ -27,14 +27,16 @@ export const users = pgTable("user", {
   emailVerified: timestamp("emailVerified", { mode: "date" }),
   image: text("image"),
   password: text("password"),
-  
+
   // Custom Fields
   isAdmin: boolean("is_admin").default(false),
   credits: integer("credits").default(0),
-  referralCode: text("referral_code").unique(), 
-  
+  referralCode: text("referral_code").unique(),
+
   createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => new Date()),
 });
 
 // --- AUTH.JS TABLES ---
@@ -59,7 +61,7 @@ export const accounts = pgTable(
     compoundKey: primaryKey({
       columns: [account.provider, account.providerAccountId],
     }),
-  })
+  }),
 );
 
 export const sessions = pgTable("session", {
@@ -79,7 +81,7 @@ export const verificationTokens = pgTable(
   },
   (vt) => ({
     compoundKey: primaryKey({ columns: [vt.identifier, vt.token] }),
-  })
+  }),
 );
 
 export const passwordResetTokens = pgTable(
@@ -91,13 +93,15 @@ export const passwordResetTokens = pgTable(
   },
   (t) => ({
     compoundKey: primaryKey({ columns: [t.identifier, t.token] }),
-  })
+  }),
 );
 
 // --- TRANSACTIONS (Top-ups) ---
 export const transactions = pgTable("transactions", {
   id: uuid("id").defaultRandom().primaryKey(),
-  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   amount: real("amount").notNull(),
   currency: text("currency").notNull(),
   credits: integer("credits").notNull(),
@@ -120,13 +124,19 @@ export const subscriptions = pgTable("subscriptions", {
   currentPeriodStart: timestamp("current_period_start"),
   currentPeriodEnd: timestamp("current_period_end"),
   createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => new Date()),
 });
 
 // --- GENERATIONS ---
 export const imageGenerations = pgTable("image_generation", {
-  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  userId: text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  userId: text("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   prompt: text("prompt").notNull(),
   model: text("model").notNull(),
   imageUrl: text("image_url"),
@@ -137,8 +147,12 @@ export const imageGenerations = pgTable("image_generation", {
 });
 
 export const videoGenerations = pgTable("video_generation", {
-  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  userId: text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  userId: text("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   prompt: text("prompt").notNull(),
   model: text("model").notNull(),
   videoUrl: text("video_url"),
@@ -149,8 +163,12 @@ export const videoGenerations = pgTable("video_generation", {
 });
 
 export const voiceGenerations = pgTable("voice_generation", {
-  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  userId: text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  userId: text("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   prompt: text("prompt").notNull(),
   voiceId: text("voice_id"),
   audioUrl: text("audio_url"),
@@ -179,6 +197,7 @@ export const aiTools = pgTable("ai_tools", {
   imageUrl: text("image_url"),
   link: text("link"),
   badge: text("badge"),
+  category: text("category"),
 });
 
 export const carousels = pgTable("carousels", {
@@ -228,23 +247,32 @@ export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
   }),
 }));
 
-export const imageGenerationsRelations = relations(imageGenerations, ({ one }) => ({
-  user: one(users, {
-    fields: [imageGenerations.userId],
-    references: [users.id],
+export const imageGenerationsRelations = relations(
+  imageGenerations,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [imageGenerations.userId],
+      references: [users.id],
+    }),
   }),
-}));
+);
 
-export const videoGenerationsRelations = relations(videoGenerations, ({ one }) => ({
-  user: one(users, {
-    fields: [videoGenerations.userId],
-    references: [users.id],
+export const videoGenerationsRelations = relations(
+  videoGenerations,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [videoGenerations.userId],
+      references: [users.id],
+    }),
   }),
-}));
+);
 
-export const voiceGenerationsRelations = relations(voiceGenerations, ({ one }) => ({
-  user: one(users, {
-    fields: [voiceGenerations.userId],
-    references: [users.id],
+export const voiceGenerationsRelations = relations(
+  voiceGenerations,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [voiceGenerations.userId],
+      references: [users.id],
+    }),
   }),
-}));
+);

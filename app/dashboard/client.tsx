@@ -4,22 +4,32 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence, PanInfo } from "framer-motion";
-import { ChevronLeft, ChevronRight, Sparkles, ArrowRight } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Sparkles,
+  ArrowRight,
+  LayoutGrid,
+  BadgeDollarSign,
+  ImageIcon,
+  Video,
+  MoreHorizontal,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import { useQuery } from "@tanstack/react-query";
 import { getDashboardContent } from "@/app/actions/content-actions";
 
-// --- SUB-COMPONENT: Optimized Tool Card ---
-// --- SUB-COMPONENT: Optimized Tool Card ---
+// ---------------------------------------------------------------------------
+// ToolCard — unchanged
+// ---------------------------------------------------------------------------
 const ToolCard = ({ tool, router }: { tool: any; router: any }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const imageUrl = tool.imageUrl || "";
   const isVideo = imageUrl.endsWith(".mp4") || imageUrl.endsWith(".webm");
   const isFree = tool.badge?.toLowerCase().trim() === "free";
-  
-  // ✅ Dynamic Badge Style: Glowing Green for Free, Red for others
+
   const badgeClass = isFree
     ? "bg-emerald-500 text-black shadow-[0_0_15px_rgba(16,185,129,0.7)] ring-1 ring-emerald-300 animate-pulse border-none"
     : "bg-red-600/90 text-white shadow-md border border-red-500/20";
@@ -47,9 +57,7 @@ const ToolCard = ({ tool, router }: { tool: any; router: any }) => {
       tabIndex={0}
       aria-label={`Open ${tool.name}`}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          router.push(tool.link || "#");
-        }
+        if (e.key === "Enter" || e.key === " ") router.push(tool.link || "#");
       }}
     >
       {tool.badge && (
@@ -74,7 +82,7 @@ const ToolCard = ({ tool, router }: { tool: any; router: any }) => {
         ) : (
           <Image
             src={imageUrl}
-            alt="" // Decorative background image, empty alt is correct here as text describes the card
+            alt=""
             fill
             sizes="(max-width: 768px) 33vw, 11vw"
             className="object-cover transition-transform duration-500 group-hover:scale-110 opacity-90 group-hover:opacity-100"
@@ -82,14 +90,10 @@ const ToolCard = ({ tool, router }: { tool: any; router: any }) => {
         )}
       </div>
       <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent opacity-80 group-hover:opacity-90 transition-opacity" />
-
-      {/* Adjusted padding (p-2) to fit nicely in the smaller 9-column grid */}
       <div className="absolute bottom-0 left-0 w-full p-2 md:p-2.5 flex flex-col justify-end">
-        {/* Added 'truncate' so long titles don't wrap on tiny cards */}
         <h3 className="text-[11px] md:text-xs font-bold text-white leading-tight mb-0.5 group-hover:text-teal-400 transition-colors truncate">
           {tool.name}
         </h3>
-        {/* Hidden on very small screens if it gets too cramped, otherwise clamp to 1 line */}
         <p className="text-[9px] md:text-[10px] text-gray-300 line-clamp-1 opacity-90">
           {tool.description}
         </p>
@@ -98,6 +102,9 @@ const ToolCard = ({ tool, router }: { tool: any; router: any }) => {
   );
 };
 
+// ---------------------------------------------------------------------------
+// ModelCard — unchanged
+// ---------------------------------------------------------------------------
 const ModelCard = ({ model, router }: { model: any; router: any }) => (
   <div
     onClick={() => router.push(model.link || "#")}
@@ -106,9 +113,7 @@ const ModelCard = ({ model, router }: { model: any; router: any }) => (
     tabIndex={0}
     aria-label={`View model ${model.name}`}
     onKeyDown={(e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        router.push(model.link || "#");
-      }
+      if (e.key === "Enter" || e.key === " ") router.push(model.link || "#");
     }}
   >
     {model.badge && (
@@ -149,19 +154,37 @@ const ModelCard = ({ model, router }: { model: any; router: any }) => (
   </div>
 );
 
-// --- MAIN CLIENT COMPONENT ---
+// ---------------------------------------------------------------------------
+// Filter config
+// ---------------------------------------------------------------------------
+const FILTERS = [
+  { key: "all", label: "All", Icon: LayoutGrid },
+  { key: "free", label: "Free", Icon: BadgeDollarSign },
+  { key: "image", label: "Image", Icon: ImageIcon },
+  { key: "video", label: "Video", Icon: Video },
+] as const;
+
+type FilterKey = (typeof FILTERS)[number]["key"];
+
+function filterTools(tools: any[], active: FilterKey): any[] {
+  if (active === "all") return tools;
+  if (active === "free")
+    return tools.filter((t) => t.badge?.toLowerCase().trim() === "free");
+  return tools.filter((t) => t.category?.toLowerCase().trim() === active);
+}
+
+// ---------------------------------------------------------------------------
+// Carousel variants
+// ---------------------------------------------------------------------------
 const slideVariants = {
-  enter: (direction: number) => ({
-    x: direction > 0 ? "100%" : "-100%",
-    opacity: 1,
-  }),
+  enter: (d: number) => ({ x: d > 0 ? "100%" : "-100%", opacity: 1 }),
   center: { x: 0, opacity: 1 },
-  exit: (direction: number) => ({
-    x: direction < 0 ? "100%" : "-100%",
-    opacity: 1,
-  }),
+  exit: (d: number) => ({ x: d < 0 ? "100%" : "-100%", opacity: 1 }),
 };
 
+// ---------------------------------------------------------------------------
+// Main Component
+// ---------------------------------------------------------------------------
 export default function DashboardPageClient() {
   const router = useRouter();
 
@@ -177,30 +200,34 @@ export default function DashboardPageClient() {
   const tools = data?.tools || [];
   const models = data?.models || [];
 
-  // Carousel State
+  // Filter state
+  const [activeFilter, setActiveFilter] = useState<FilterKey>("all");
+  const filteredTools = filterTools(tools, activeFilter);
+
+  // Carousel
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [direction, setDirection] = useState(0);
   const autoPlayRef = useRef<NodeJS.Timeout | null>(null);
 
   const nextSlide = useCallback(() => {
-    if (slides.length === 0) return;
+    if (!slides.length) return;
     setDirection(1);
-    setCurrentSlideIndex((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
+    setCurrentSlideIndex((p) => (p === slides.length - 1 ? 0 : p + 1));
   }, [slides.length]);
 
   const prevSlide = useCallback(() => {
-    if (slides.length === 0) return;
+    if (!slides.length) return;
     setDirection(-1);
-    setCurrentSlideIndex((prev) => (prev === 0 ? slides.length - 1 : prev - 1));
+    setCurrentSlideIndex((p) => (p === 0 ? slides.length - 1 : p - 1));
   }, [slides.length]);
 
-  const goToSlide = (index: number) => {
-    setDirection(index > currentSlideIndex ? 1 : -1);
-    setCurrentSlideIndex(index);
+  const goToSlide = (i: number) => {
+    setDirection(i > currentSlideIndex ? 1 : -1);
+    setCurrentSlideIndex(i);
   };
 
   useEffect(() => {
-    if (slides.length > 0) autoPlayRef.current = setInterval(nextSlide, 5000);
+    if (slides.length) autoPlayRef.current = setInterval(nextSlide, 5000);
     return () => {
       if (autoPlayRef.current) clearInterval(autoPlayRef.current);
     };
@@ -211,23 +238,27 @@ export default function DashboardPageClient() {
   };
   const resumeAutoPlay = () => {
     if (autoPlayRef.current) clearInterval(autoPlayRef.current);
-    if (slides.length > 0) autoPlayRef.current = setInterval(nextSlide, 5000);
+    if (slides.length) autoPlayRef.current = setInterval(nextSlide, 5000);
   };
-
-  const handleDragEnd = (event: any, info: PanInfo) => {
+  const handleDragEnd = (_e: any, info: PanInfo) => {
     if (info.offset.x < -50) nextSlide();
     else if (info.offset.x > 50) prevSlide();
   };
 
-  // Skeleton Loader
+  // Skeleton
   if (isLoading) {
     return (
       <div className="flex flex-col gap-8 pb-20 animate-pulse">
         <div className="h-[40vh] md:h-[50vh] w-full bg-slate-900/50 rounded-2xl border border-white/5" />
         <div className="space-y-4">
           <div className="h-8 w-48 bg-slate-900/50 rounded-md" />
+          <div className="flex gap-2">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-8 w-24 bg-slate-900/50 rounded-full" />
+            ))}
+          </div>
           <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
-            {[...Array(6)].map((_, i) => (
+            {[...Array(9)].map((_, i) => (
               <div
                 key={i}
                 className="aspect-square bg-slate-900/50 rounded-xl border border-white/5"
@@ -241,7 +272,9 @@ export default function DashboardPageClient() {
 
   return (
     <div className="flex flex-col gap-8 pb-20">
-      {/* --- Carousel --- */}
+      {/* ------------------------------------------------------------------ */}
+      {/* Carousel                                                             */}
+      {/* ------------------------------------------------------------------ */}
       {slides.length > 0 ? (
         <section
           className="no-sidebar-swipe relative h-[40vh] md:h-[50vh] w-full rounded-2xl overflow-hidden shadow-2xl border border-white/10 group bg-slate-900"
@@ -261,7 +294,7 @@ export default function DashboardPageClient() {
                 x: { type: "spring", stiffness: 300, damping: 30 },
                 opacity: { duration: 0.2 },
               }}
-              className="absolute inset-0 bg-cover bg-center touch-pan-y"
+              className="absolute inset-0 touch-pan-y"
               drag="x"
               dragConstraints={{ left: 0, right: 0 }}
               dragElastic={1}
@@ -269,9 +302,9 @@ export default function DashboardPageClient() {
             >
               <Image
                 src={slides[currentSlideIndex].imageUrl}
-                alt="" // Decorative background
+                alt=""
                 fill
-                priority={true}
+                priority
                 className="object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/60 to-transparent flex flex-col items-center justify-center text-center p-6 z-10">
@@ -311,7 +344,6 @@ export default function DashboardPageClient() {
             </motion.div>
           </AnimatePresence>
 
-          {/* ✅ FIXED: Accessible Buttons with Labels */}
           <button
             onClick={prevSlide}
             aria-label="Previous Slide"
@@ -319,7 +351,6 @@ export default function DashboardPageClient() {
           >
             <ChevronLeft className="h-6 w-6" />
           </button>
-
           <button
             onClick={nextSlide}
             aria-label="Next Slide"
@@ -327,24 +358,16 @@ export default function DashboardPageClient() {
           >
             <ChevronRight className="h-6 w-6" />
           </button>
-
-          {/* ✅ FIXED: Accessible & Larger Touch Target Dots */}
-          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 z-20">
-            {slides.map((_, index) => (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+            {slides.map((_, i) => (
               <button
-                key={index}
-                onClick={() => goToSlide(index)}
-                aria-label={`Go to slide ${index + 1}`}
-                // Added padding (p-2) to make the click area larger (48px+)
-                // while keeping the visual dot small
-                className="p-2 group focus:outline-none"
+                key={i}
+                onClick={() => goToSlide(i)}
+                aria-label={`Go to slide ${i + 1}`}
+                className="p-2 focus:outline-none"
               >
                 <div
-                  className={`h-2 rounded-full transition-all duration-300 ${
-                    index === currentSlideIndex
-                      ? "w-6 bg-teal-400"
-                      : "w-2 bg-white/50 group-hover:bg-white/80"
-                  }`}
+                  className={`h-2 rounded-full transition-all duration-300 ${i === currentSlideIndex ? "w-6 bg-teal-400" : "w-2 bg-white/50 hover:bg-white/80"}`}
                 />
               </button>
             ))}
@@ -356,9 +379,12 @@ export default function DashboardPageClient() {
         </div>
       )}
 
-      {/* --- Featured Tools --- */}
+      {/* ------------------------------------------------------------------ */}
+      {/* Featured Tools                                                       */}
+      {/* ------------------------------------------------------------------ */}
       <section>
-        <div className="flex justify-between items-center mb-6">
+        {/* Top row: title + View All */}
+        <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl md:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-teal-500">
             Featured Tools
           </h2>
@@ -373,22 +399,78 @@ export default function DashboardPageClient() {
           </Button>
         </div>
 
-        {/* MOBILE GRID: 3 Columns */}
-        <div className="grid grid-cols-3 gap-3 md:gap-4 lg:hidden">
-          {tools.slice(0, 9).map((tool: any) => (
-            <ToolCard key={tool.id} tool={tool} router={router} />
-          ))}
+        {/* Filter tabs */}
+        <div className="flex gap-2 overflow-x-auto pb-2 mb-5 scrollbar-none">
+          {FILTERS.map((f) => {
+            const isActive = activeFilter === f.key;
+            return (
+              <button
+                key={f.key}
+                onClick={() => setActiveFilter(f.key)}
+                aria-pressed={isActive}
+                className={`
+                  relative flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full
+                  text-xs font-semibold transition-all duration-200 border
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500
+                  ${
+                    isActive
+                      ? "bg-teal-500/20 border-teal-500/60 text-teal-300 shadow-[0_0_14px_rgba(20,184,166,0.25)]"
+                      : "bg-slate-800/60 border-white/10 text-gray-400 hover:text-gray-200 hover:border-white/20 hover:bg-slate-700/60"
+                  }
+                `}
+              >
+                <f.Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>{f.label}</span>
+                {isActive && (
+                  <motion.span
+                    layoutId="filter-active-ring"
+                    className="absolute inset-0 rounded-full border border-teal-400/50 pointer-events-none"
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  />
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        {/* DESKTOP GRID: Changed from 6 columns to 9 columns, and array slice from 6 to 9 */}
-        <div className="hidden lg:grid lg:grid-cols-9 lg:gap-3 xl:gap-4">
-          {tools.slice(0, 9).map((tool: any) => (
-            <ToolCard key={tool.id} tool={tool} router={router} />
-          ))}
-        </div>
+        {/* Tool grid — fades when filter changes */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeFilter}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.15 }}
+          >
+            {filteredTools.length > 0 ? (
+              <>
+                {/* Mobile: 3 cols */}
+                <div className="grid grid-cols-3 gap-3 md:gap-4 lg:hidden">
+                  {filteredTools.slice(0, 9).map((tool: any) => (
+                    <ToolCard key={tool.id} tool={tool} router={router} />
+                  ))}
+                </div>
+                {/* Desktop: 9 cols */}
+                <div className="hidden lg:grid lg:grid-cols-9 lg:gap-3 xl:gap-4">
+                  {filteredTools.slice(0, 9).map((tool: any) => (
+                    <ToolCard key={tool.id} tool={tool} router={router} />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-32 rounded-xl border border-white/5 bg-slate-900/30">
+                <p className="text-gray-500 text-sm">
+                  No tools in this category yet.
+                </p>
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
       </section>
 
-      {/* --- Top Models --- */}
+      {/* ------------------------------------------------------------------ */}
+      {/* Latest Models                                                        */}
+      {/* ------------------------------------------------------------------ */}
       <section>
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl md:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-teal-500">

@@ -1,256 +1,500 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import {
-  Sparkles,
   Loader2,
-  Download,
   UploadCloud,
   XCircle,
-  Frame,
-  Film,
-  Camera,
-  Settings2,
-  Cpu, // ✅ Imported Cpu Icon
+  Download,
+  Play,
+  Pause,
+  Scissors,
+  Wand2,
+  Trash2,
+  Video,
+  Cpu,
 } from "lucide-react";
-import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 
-// --- Types ---
-interface ExtractedFrame {
+// Remotion
+import { Player, PlayerRef } from "@remotion/player";
+import { renderMediaOnWeb } from "@remotion/web-renderer";
+import {
+  AbsoluteFill,
+  useCurrentFrame,
+  useVideoConfig,
+  Video as RemotionVideo,
+  spring,
+  interpolate,
+  Easing,
+} from "remotion";
+
+const MAX_FILE_SIZE_MB = 100;
+const MAX_DURATION_SEC = 60;
+
+// ─── ZOOM TYPES & PRESETS ──────────────────────────────────────────────────
+export type ZoomType =
+  | "none"
+  | "fast-snap"
+  | "smooth-in"
+  | "crash-zoom"
+  | "zoom-out"
+  | "pulse";
+
+export interface ZoomEvent {
   id: string;
-  label: string;
-  url: string;
+  start: number;
+  end: number;
+  type: ZoomType;
+  scale: number;
 }
 
-const FrameExtractorPage = () => {
-  // State
-  const [sourceVideoFile, setSourceVideoFile] = useState<File | null>(null);
-  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
-  const [extractedFrames, setExtractedFrames] = useState<ExtractedFrame[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isMobile, setIsMobile] = useState(false); // Device Detection
+const ZOOM_PRESETS: { id: ZoomType; label: string; desc: string }[] = [
+  { id: "none", label: "None", desc: "No zoom" },
+  { id: "fast-snap", label: "Fast Snap", desc: "Energetic cut" },
+  { id: "crash-zoom", label: "Crash Zoom", desc: "Hard punch in" },
+  { id: "smooth-in", label: "Smooth In", desc: "Slow push" },
+  { id: "zoom-out", label: "Zoom Out", desc: "Pulls back" },
+  { id: "pulse", label: "Smooth Pulse", desc: "Zoom in/out" },
+];
 
-  // Mode Switch State
-  const [extractionMode, setExtractionMode] = useState<"auto" | "custom">(
-    "auto",
+// ─── REMOTION COMPONENT: Physics Engine ───────────────────────────────────────
+const AutoZoomComposition: React.FC<{
+  videoSrc: string;
+  zoomEvents: ZoomEvent[];
+}> = ({ videoSrc, zoomEvents }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const currentTime = frame / fps;
+
+  const activeZoom = zoomEvents.find(
+    (z) => currentTime >= z.start && currentTime < z.end,
   );
-  const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
+  const recentZoom = zoomEvents.find(
+    (z) => currentTime >= z.end && currentTime < z.end + 0.5,
+  );
 
+  let currentScale = 1;
+
+  if (activeZoom) {
+    const timeInZoom = currentTime - activeZoom.start;
+    const framesInZoom = Math.max(0, timeInZoom * fps);
+    const durationFrames = Math.max(
+      1,
+      (activeZoom.end - activeZoom.start) * fps,
+    );
+
+    switch (activeZoom.type) {
+      case "fast-snap":
+        currentScale = spring({
+          frame: framesInZoom,
+          fps,
+          config: { damping: 14, stiffness: 150 },
+          from: 1,
+          to: activeZoom.scale,
+        });
+        break;
+      case "crash-zoom":
+        currentScale = activeZoom.scale;
+        break;
+      case "smooth-in":
+        currentScale = interpolate(
+          framesInZoom,
+          [0, durationFrames],
+          [1, activeZoom.scale],
+          {
+            easing: Easing.bezier(0.2, 0.8, 0.2, 1),
+            extrapolateRight: "clamp",
+          },
+        );
+        break;
+      case "zoom-out":
+        currentScale = interpolate(
+          framesInZoom,
+          [0, durationFrames],
+          [activeZoom.scale, 1],
+          {
+            easing: Easing.bezier(0.2, 0.8, 0.2, 1),
+            extrapolateRight: "clamp",
+          },
+        );
+        break;
+      case "pulse":
+        const isEnding = durationFrames - framesInZoom < 0.5 * fps;
+        if (isEnding) {
+          currentScale = spring({
+            frame: framesInZoom - (durationFrames - 0.5 * fps),
+            fps,
+            config: { damping: 14, stiffness: 100 },
+            from: activeZoom.scale,
+            to: 1,
+          });
+        } else {
+          currentScale = spring({
+            frame: framesInZoom,
+            fps,
+            config: { damping: 14, stiffness: 100 },
+            from: 1,
+            to: activeZoom.scale,
+          });
+        }
+        break;
+      case "none":
+      default:
+        currentScale = 1;
+        break;
+    }
+  } else if (
+    recentZoom &&
+    recentZoom.type !== "crash-zoom" &&
+    recentZoom.type !== "zoom-out"
+  ) {
+    const timeSinceEnd = currentTime - recentZoom.end;
+    const framesSinceEnd = Math.max(0, timeSinceEnd * fps);
+    currentScale = spring({
+      frame: framesSinceEnd,
+      fps,
+      config: { damping: 14, stiffness: 100 },
+      from: recentZoom.scale,
+      to: 1,
+    });
+  }
+
+  return (
+    <AbsoluteFill className="bg-black flex items-center justify-center overflow-hidden">
+      <div
+        style={{
+          transform: `scale(${currentScale})`,
+          width: "100%",
+          height: "100%",
+          transformOrigin: "center center",
+          willChange: "transform",
+        }}
+      >
+        <RemotionVideo
+          src={videoSrc}
+          acceptableTimeShiftInSeconds={1.0}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+// ─── MAIN PAGE ────────────────────────────────────────────────────────────────
+export default function AutoZoomPage() {
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaSrc, setMediaSrc] = useState<string | null>(null);
+  const [videoDimensions, setVideoDimensions] = useState({ w: 1080, h: 1920 });
+  const [videoDuration, setVideoDuration] = useState(10);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Timeline State
+  const [zoomEvents, setZoomEvents] = useState<ZoomEvent[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [playbackTime, setPlaybackTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [progress, setProgress] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+
+  const workerRef = useRef<Worker | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const customVideoRef = useRef<HTMLVideoElement>(null);
+  const playerRef = useRef<PlayerRef>(null);
+  const rafRef = useRef<number | null>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
 
-  // --- Effect: Detect Mobile ---
+  const playerInputProps = useMemo(() => {
+    return { videoSrc: mediaSrc || "", zoomEvents };
+  }, [mediaSrc, zoomEvents]);
+
+  // Mobile Detection
   useEffect(() => {
-    const checkMobile = () => {
-      const userAgent =
-        typeof window.navigator === "undefined" ? "" : navigator.userAgent;
-      const mobile = Boolean(
-        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-          userAgent,
-        ) || window.innerWidth < 768,
-      );
-      setIsMobile(mobile);
-    };
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // --- Handlers ---
+  // Drag & Drop Logic
+  const dragState = useRef<{
+    id: string;
+    startMouseX: number;
+    origStart: number;
+    origEnd: number;
+  } | null>(null);
 
-  const handleVideoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // LIMIT 1: File Size (100MB)
-      if (file.size > 100 * 1024 * 1024) {
-        toast.error("File size cannot exceed 100MB (Browser Limit).");
-        return;
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragState.current || !timelineRef.current) return;
+      const { id, startMouseX, origStart, origEnd } = dragState.current;
+      const rect = timelineRef.current.getBoundingClientRect();
+      const deltaTime =
+        ((e.clientX - startMouseX) / rect.width) * videoDuration;
+      let newStart = origStart + deltaTime;
+      let newEnd = origEnd + deltaTime;
+
+      if (newStart < 0) {
+        newStart = 0;
+        newEnd = origEnd - origStart;
       }
-      setSourceVideoFile(file);
-      const url = URL.createObjectURL(file);
-      setVideoPreviewUrl(url);
-      setExtractedFrames([]);
-      e.target.value = "";
+      if (newEnd > videoDuration) {
+        newEnd = videoDuration;
+        newStart = videoDuration - (origEnd - origStart);
+      }
+
+      setZoomEvents((prev) =>
+        prev.map((z) =>
+          z.id === id ? { ...z, start: newStart, end: newEnd } : z,
+        ),
+      );
+    };
+    const handleMouseUp = () => {
+      dragState.current = null;
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [videoDuration]);
+
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      )
+        return;
+      if ((e.key === "Backspace" || e.key === "Delete") && selectedEventId) {
+        setZoomEvents((prev) => prev.filter((z) => z.id !== selectedEventId));
+        setSelectedEventId(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedEventId]);
+
+  // Playback Sync
+  const updatePlaybackTime = useCallback(() => {
+    if (playerRef.current) {
+      const frame = playerRef.current.getCurrentFrame();
+      setPlaybackTime(frame / 30);
+      setIsPlaying(playerRef.current.isPlaying());
     }
+    rafRef.current = requestAnimationFrame(updatePlaybackTime);
+  }, []);
+
+  useEffect(() => {
+    rafRef.current = requestAnimationFrame(updatePlaybackTime);
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [updatePlaybackTime]);
+
+  useEffect(() => {
+    return () => workerRef.current?.terminate();
+  }, []);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("video/"))
+      return toast.error("Invalid video file.");
+    if (file.size / (1024 * 1024) > MAX_FILE_SIZE_MB)
+      return toast.error(`File too large. Limit is ${MAX_FILE_SIZE_MB}MB.`);
+
+    if (mediaSrc) URL.revokeObjectURL(mediaSrc);
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.muted = true;
+    video.onloadedmetadata = () => {
+      if (video.duration > MAX_DURATION_SEC) {
+        toast.error(`Media too long. Limit is ${MAX_DURATION_SEC}s.`);
+        URL.revokeObjectURL(url);
+      } else {
+        setVideoDimensions({ w: video.videoWidth, h: video.videoHeight });
+        setVideoDuration(video.duration);
+        setMediaFile(file);
+        setMediaSrc(url);
+        setZoomEvents([]);
+      }
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+    };
+    video.src = url;
   };
 
   const clearVideo = () => {
-    setSourceVideoFile(null);
-    if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
-    setVideoPreviewUrl(null);
-    setExtractedFrames([]);
+    setMediaFile(null);
+    if (mediaSrc) URL.revokeObjectURL(mediaSrc);
+    setMediaSrc(null);
+    setZoomEvents([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  // Zero-Cost Client-Side Capture
-  const captureFrame = (video: HTMLVideoElement): string => {
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext("2d");
-    ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.9);
+  const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    setSelectedEventId(null);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickedTime = ((e.clientX - rect.left) / rect.width) * videoDuration;
+    if (playerRef.current)
+      playerRef.current.seekTo(Math.floor(clickedTime * 30));
   };
 
-  // --- Logic: Auto Extract ---
-  const handleAutoExtract = async () => {
-    if (!sourceVideoFile || !videoRef.current) return;
+  const addManualZoom = () => {
+    const newId = `zoom-${Date.now()}`;
+    const newZoom: ZoomEvent = {
+      id: newId,
+      start: playbackTime,
+      end: Math.min(playbackTime + 2, videoDuration),
+      type: "fast-snap",
+      scale: 1.3,
+    };
+    setZoomEvents((prev) => [...prev, newZoom]);
+    setSelectedEventId(newId);
+  };
 
-    setIsLoading(true);
-    toast.info("Extracting frames on device...");
+  const updateSelectedZoom = (patch: Partial<ZoomEvent>) => {
+    if (!selectedEventId) return;
+    setZoomEvents((prev) =>
+      prev.map((z) => (z.id === selectedEventId ? { ...z, ...patch } : z)),
+    );
+  };
 
-    const video = videoRef.current;
-
-    // Safety check for duration
-    if (isNaN(video.duration)) {
-      toast.error("Video not loaded yet.");
-      setIsLoading(false);
-      return;
-    }
+  const handleAutoGenerate = async () => {
+    if (!mediaFile) return;
+    setIsProcessing(true);
+    setProgress("Analyzing audio...");
 
     try {
-      const frames: ExtractedFrame[] = [];
-      const duration = video.duration;
+      const audioContext = new window.AudioContext({ sampleRate: 16000 });
+      const arrayBuffer = await mediaFile.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      const rawAudio = audioBuffer.getChannelData(0);
+      audioContext.close();
 
-      // First
-      video.currentTime = 0.1;
-      await new Promise((r) => (video.onseeked = r));
-      frames.push({
-        id: "first",
-        label: "First Frame",
-        url: captureFrame(video),
+      if (!workerRef.current) {
+        workerRef.current = new Worker(
+          new URL("../caption/transcribe.worker.ts", import.meta.url),
+          { type: "module" },
+        );
+        workerRef.current.onmessage = (e) => {
+          const { status, result, error, message } = e.data;
+          if (status === "downloading")
+            setProgress(message || "Downloading AI Engine...");
+          if (status === "processing") setProgress("Finding cuts...");
+          if (status === "success") {
+            const autoZooms: ZoomEvent[] = [];
+            let lastZoomEnd = 0;
+            (result.chunks || []).forEach((chunk: any, index: number) => {
+              let start = chunk.timestamp[0];
+              let end = Math.min(
+                chunk.timestamp[1] || start + 2,
+                videoDuration,
+              );
+              if (start < lastZoomEnd) return;
+              const prevEnd =
+                index > 0 ? result.chunks[index - 1].timestamp[1] : 0;
+              if (start - prevEnd > 1.0 || index % 3 === 0) {
+                autoZooms.push({
+                  id: `auto-${index}`,
+                  start,
+                  end,
+                  type: start - prevEnd > 1.0 ? "crash-zoom" : "smooth-in",
+                  scale: 1.25,
+                });
+                lastZoomEnd = end;
+              }
+            });
+            setZoomEvents(autoZooms);
+            setIsProcessing(false);
+            setProgress("");
+            toast.success("Timeline created!");
+          }
+          if (status === "error") {
+            setIsProcessing(false);
+            toast.error("AI Error: " + error);
+          }
+        };
+      }
+      workerRef.current.postMessage({ audio: rawAudio });
+    } catch (err) {
+      toast.error("Processing failed.");
+      setIsProcessing(false);
+    }
+  };
+
+  const handleExport = async () => {
+    if (!mediaSrc) return;
+    setIsExporting(true);
+    setExportProgress(0);
+    toast.info("Rendering Video...");
+
+    try {
+      const { getBlob } = await renderMediaOnWeb({
+        composition: {
+          id: "AutoZoomExport",
+          component: AutoZoomComposition,
+          durationInFrames: Math.max(1, Math.floor(videoDuration * 30)),
+          fps: 30,
+          width: videoDimensions.w,
+          height: videoDimensions.h,
+          defaultProps: playerInputProps,
+        },
+        inputProps: playerInputProps,
+        onProgress: ({ progress }) =>
+          setExportProgress(Math.round(progress * 100)),
       });
-
-      // Mid
-      video.currentTime = duration / 2;
-      await new Promise((r) => (video.onseeked = r));
-      frames.push({
-        id: "mid",
-        label: "Middle Frame",
-        url: captureFrame(video),
-      });
-
-      // Last
-      video.currentTime = Math.max(0, duration - 0.1);
-      await new Promise((r) => (video.onseeked = r));
-      frames.push({
-        id: "last",
-        label: "Last Frame",
-        url: captureFrame(video),
-      });
-
-      setExtractedFrames(frames);
-      toast.success("Frames extracted successfully!");
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to extract frames.");
+      const blob = await getBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "submagic-zoom-video.mp4";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Export Complete!");
+    } catch (error: any) {
+      toast.error("Export failed: " + error.message);
     } finally {
-      setIsLoading(false);
+      setIsExporting(false);
     }
   };
 
-  // --- Logic: Custom Extract ---
-  const openCustomExtractor = () => {
-    if (!sourceVideoFile) {
-      toast.error("Please upload a video first.");
-      return;
-    }
-    setIsCustomModalOpen(true);
-  };
-
-  const handleCustomCapture = () => {
-    if (!customVideoRef.current) return;
-    const video = customVideoRef.current;
-    const currentTime = video.currentTime;
-    const frameUrl = captureFrame(video);
-    const label = `Time: ${currentTime.toFixed(2)}s`;
-
-    setExtractedFrames((prev) => [
-      ...prev,
-      { id: `custom-${Date.now()}`, label, url: frameUrl },
-    ]);
-    toast.success("Frame Captured!");
-  };
-
-  // Main Button Handler
-  const handleGenerateClick = () => {
-    if (extractionMode === "auto") {
-      handleAutoExtract();
-    } else {
-      openCustomExtractor();
-    }
-  };
-
-  const handleDownload = (imageUrl: string, label: string) => {
-    const link = document.createElement("a");
-    link.href = imageUrl;
-    link.download = `frame-${label
-      .replace(/[^a-z0-9]/gi, "-")
-      .toLowerCase()}.jpg`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  const selectedEvent = zoomEvents.find((z) => z.id === selectedEventId);
 
   return (
-    <div className="flex flex-col h-full text-gray-300">
-      {/* Hidden Video for Auto-Logic & Validation */}
-      {videoPreviewUrl && (
-        <video
-          ref={videoRef}
-          src={videoPreviewUrl}
-          className="hidden"
-          crossOrigin="anonymous"
-          preload="metadata"
-          onLoadedMetadata={(e) => {
-            const video = e.currentTarget;
-            // LIMIT 2: Dynamic Duration Check
-            const timeLimit = isMobile ? 300 : 600; // 5 mins Mobile, 10 mins Desktop
-
-            if (video.duration > timeLimit) {
-              const limitText = isMobile ? "5 minutes" : "10 minutes";
-              toast.error(`Video exceeds ${limitText} limit on this device.`);
-              clearVideo();
-              return;
-            }
-            video.currentTime = 0;
-          }}
-          onError={() => {
-            toast.error("Error loading video format.");
-            clearVideo();
-          }}
-        />
-      )}
-
-      {/* 1. MAIN PREVIEW AREA */}
-      <div className="flex-grow overflow-y-auto p-4 md:p-6 pb-40 flex flex-col justify-start min-h-[60vh]">
-        <div className="w-full max-w-7xl mx-auto flex flex-col items-center">
+    <div className="no-sidebar-swipe flex flex-col h-[calc(100vh-64px)] text-gray-300 bg-black relative overflow-hidden">
+      {/* ─── SCROLLABLE CONTENT AREA ─── */}
+      <div className="flex-grow overflow-y-auto p-4 md:p-6 pb-40 flex flex-col items-center">
+        <div className="w-full max-w-5xl mx-auto flex flex-col items-center gap-6">
           {/* Empty State */}
-          {extractedFrames.length === 0 && !videoPreviewUrl && (
-            <div className="flex flex-col items-center justify-center text-center text-gray-600 mt-20 max-w-md w-full">
-              <Frame className="h-20 w-20 mb-6 opacity-30" />
+          {!mediaSrc && (
+            <div className="flex flex-col items-center justify-center text-center text-gray-600 mt-10 max-w-md w-full">
+              <Video className="h-20 w-20 mb-6 opacity-30" />
               <h1 className="text-2xl font-semibold mb-2 text-gray-500">
-                Video Frame Extractor
+                Auto Zoom Editor
               </h1>
               <p className="text-gray-500 mb-6">
-                Upload a video to extract frames.
+                Upload a video to add dynamic, Submagic-style zoom effects.
               </p>
 
-              {/* ✅ ADDED: Teal Info Box */}
               <div className="p-4 bg-teal-950/30 border border-teal-800/50 rounded-lg w-full animate-in fade-in slide-in-from-bottom-2">
                 <div className="space-y-1 text-center">
                   <div className="flex items-center justify-center gap-2 text-teal-300">
@@ -258,235 +502,348 @@ const FrameExtractorPage = () => {
                     <p className="text-sm font-medium">Running Locally</p>
                   </div>
                   <p className="text-xs text-teal-200/70 leading-relaxed">
-                    100% Private. Runs entirely on your device using browser
-                    acceleration. No images leave your browser.
+                    100% Private. Audio transcription and video rendering happen
+                    entirely on your device.
                   </p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Video Preview (Before Extraction) */}
-          {extractedFrames.length === 0 && videoPreviewUrl && (
-            <div className="animate-in fade-in duration-500 relative group w-fit h-auto mt-10">
-              <video
-                src={videoPreviewUrl}
-                controls
-                className="max-h-[50vh] max-w-full w-auto rounded-lg shadow-2xl border border-gray-700"
-              />
-              <Button
-                variant="destructive"
-                size="icon"
-                onClick={clearVideo}
-                className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <XCircle className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
-
-          {/* Results Grid */}
-          {extractedFrames.length > 0 && (
-            <div className="w-full mt-4">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-gray-400">
-                  Extracted Frames ({extractedFrames.length})
-                </h3>
+          {/* Editor Area */}
+          {mediaSrc && (
+            <div className="w-full flex flex-col gap-6 animate-in fade-in duration-500">
+              {/* Video Player */}
+              <div className="relative w-full max-w-[340px] md:max-w-md mx-auto aspect-9/16 rounded-xl overflow-hidden border border-gray-700 bg-black shadow-2xl group">
+                <Player
+                  ref={playerRef}
+                  component={AutoZoomComposition}
+                  inputProps={playerInputProps}
+                  durationInFrames={Math.max(1, Math.floor(videoDuration * 30))}
+                  fps={30}
+                  compositionWidth={videoDimensions.w}
+                  compositionHeight={videoDimensions.h}
+                  style={{ width: "100%", height: "100%" }}
+                  loop
+                />
                 <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setExtractedFrames([])}
-                  className="text-red-400 hover:text-red-300"
+                  variant="destructive"
+                  size="icon"
+                  onClick={clearVideo}
+                  className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-20"
                 >
-                  Clear Results
+                  <XCircle className="h-4 w-4" />
                 </Button>
+                {isExporting && (
+                  <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center z-50">
+                    <Loader2 className="h-10 w-10 animate-spin text-orange-500 mb-4" />
+                    <h3 className="text-white font-bold text-lg">
+                      {exportProgress}%
+                    </h3>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Rendering Video...
+                    </p>
+                  </div>
+                )}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {extractedFrames.map((frame) => (
-                  <div
-                    key={frame.id}
-                    className="flex flex-col gap-2 animate-in fade-in zoom-in duration-500"
-                  >
-                    <div className="text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-900/50 py-1 rounded">
-                      {frame.label}
-                    </div>
-                    <div className="relative group w-full aspect-video rounded-lg overflow-hidden border border-gray-700 bg-black/50">
-                      <img
-                        src={frame.url}
-                        alt={frame.label}
-                        className="w-full h-full object-contain"
-                      />
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleDownload(frame.url, frame.label)}
-                        className="absolute bottom-2 right-2 z-10 h-8 w-8 rounded-full bg-black/60 text-white border border-white/20 hover:bg-black/80"
+
+              {/* Mobile-Friendly Horizontal Zoom Presets */}
+              <div className="w-full bg-gray-900/50 border border-gray-800 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                    Zoom Templates
+                  </h2>
+                  <span className="text-[10px] text-gray-500">
+                    Click to add at playhead
+                  </span>
+                </div>
+
+                <div className="flex overflow-x-auto gap-3 pb-2 w-full snap-x scrollbar-hide">
+                  {ZOOM_PRESETS.map((preset) => (
+                    <div
+                      key={preset.id}
+                      onClick={() => {
+                        if (selectedEventId) {
+                          updateSelectedZoom({ type: preset.id });
+                        } else {
+                          const newId = `zoom-${Date.now()}`;
+                          setZoomEvents((prev) => [
+                            ...prev,
+                            {
+                              id: newId,
+                              start: playbackTime,
+                              end: Math.min(playbackTime + 2, videoDuration),
+                              type: preset.id,
+                              scale: 1.3,
+                            },
+                          ]);
+                          setSelectedEventId(newId);
+                        }
+                      }}
+                      className={`shrink-0 w-28 cursor-pointer rounded-xl border-2 p-2 flex flex-col items-center justify-center text-center transition-all bg-gray-950 snap-start
+                        ${selectedEvent?.type === preset.id ? "border-cyan-500 bg-cyan-500/10 shadow-[0_0_15px_rgba(6,182,212,0.2)]" : "border-gray-800 hover:border-gray-600"}`}
+                    >
+                      <div className="w-10 h-14 bg-gray-800 rounded mb-2 border border-gray-700 flex items-center justify-center overflow-hidden">
+                        <div
+                          className={`w-6 h-6 bg-cyan-500/40 rounded-full ${preset.id === "fast-snap" ? "animate-bounce" : preset.id === "pulse" ? "animate-pulse" : ""}`}
+                        />
+                      </div>
+                      <span
+                        className={`text-[10px] font-bold ${selectedEvent?.type === preset.id ? "text-cyan-400" : "text-gray-300"}`}
                       >
-                        <Download className="h-4 w-4" />
-                      </Button>
+                        {preset.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Selected Event Controls */}
+                {selectedEvent && (
+                  <div className="mt-4 pt-4 border-t border-gray-800 grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in">
+                    <div className="flex flex-col gap-2">
+                      <div className="flex justify-between items-center">
+                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                          Zoom Level
+                        </Label>
+                        <span className="text-[10px] font-mono text-cyan-400 font-bold">
+                          {selectedEvent.scale}x
+                        </span>
+                      </div>
+                      <Slider
+                        min={1.0}
+                        max={2.0}
+                        step={0.05}
+                        value={[selectedEvent.scale]}
+                        onValueChange={([v]) =>
+                          updateSelectedZoom({ scale: v })
+                        }
+                        className="**:data-radix-slider-range:bg-cyan-500 **:[[role=slider]]:border-cyan-500"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex justify-between items-center">
+                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                          Duration
+                        </Label>
+                        <span className="text-[10px] font-mono text-cyan-400 font-bold">
+                          {Math.max(
+                            0.5,
+                            selectedEvent.end - selectedEvent.start,
+                          ).toFixed(1)}
+                          s
+                        </span>
+                      </div>
+                      <Slider
+                        min={0.5}
+                        max={10.0}
+                        step={0.1}
+                        value={[
+                          Number(
+                            Math.max(
+                              0.5,
+                              selectedEvent.end - selectedEvent.start,
+                            ).toFixed(1),
+                          ),
+                        ]}
+                        onValueChange={([v]) =>
+                          updateSelectedZoom({
+                            end: Math.min(
+                              selectedEvent.start + v,
+                              videoDuration,
+                            ),
+                          })
+                        }
+                        className="**:data-radix-slider-range:bg-cyan-500 **:[[role=slider]]:border-cyan-500"
+                      />
                     </div>
                   </div>
-                ))}
+                )}
+              </div>
+
+              {/* Compact Timeline */}
+              <div className="w-full bg-gray-950 border border-gray-800 rounded-xl p-4 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => {
+                        if (playerRef.current)
+                          isPlaying
+                            ? playerRef.current.pause()
+                            : playerRef.current.play();
+                      }}
+                      className="w-8 h-8 bg-white text-black rounded-full flex items-center justify-center hover:bg-gray-200"
+                    >
+                      {isPlaying ? (
+                        <Pause className="w-4 h-4" />
+                      ) : (
+                        <Play className="w-4 h-4 ml-1" />
+                      )}
+                    </button>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-sm font-mono text-white font-bold">
+                        {playbackTime.toFixed(1)}s
+                      </span>
+                      <span className="text-xs font-mono text-gray-500">
+                        / {videoDuration.toFixed(1)}s
+                      </span>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={addManualZoom}
+                    variant="ghost"
+                    className="text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 h-8 px-2 text-xs"
+                  >
+                    <Scissors className="w-3 h-3 mr-1.5" /> Cut
+                  </Button>
+                </div>
+
+                <div
+                  ref={timelineRef}
+                  className="relative w-full h-12 bg-gray-900 border border-gray-800 rounded-lg mt-1 overflow-hidden cursor-crosshair"
+                  onMouseDown={handleTimelineClick}
+                >
+                  {/* Playhead */}
+                  <div
+                    className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-50 pointer-events-none shadow-[0_0_10px_rgba(239,68,68,0.8)]"
+                    style={{ left: `${(playbackTime / videoDuration) * 100}%` }}
+                  >
+                    <div className="absolute -top-1 -left-1 w-2.5 h-2.5 bg-red-500 rounded-full" />
+                  </div>
+
+                  {/* Events */}
+                  {zoomEvents.map((evt) => {
+                    const leftPct = (evt.start / videoDuration) * 100;
+                    const widthPct =
+                      ((evt.end - evt.start) / videoDuration) * 100;
+                    const isSelected = selectedEventId === evt.id;
+
+                    return (
+                      <div
+                        key={evt.id}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          setSelectedEventId(evt.id);
+                          if (playerRef.current)
+                            playerRef.current.seekTo(
+                              Math.floor(evt.start * 30),
+                            );
+                          dragState.current = {
+                            id: evt.id,
+                            startMouseX: e.clientX,
+                            origStart: evt.start,
+                            origEnd: evt.end,
+                          };
+                        }}
+                        className={`absolute top-1 bottom-1 rounded-md transition-colors cursor-grab active:cursor-grabbing border flex items-center justify-center overflow-hidden
+                              ${isSelected ? "bg-cyan-500/80 border-cyan-400 z-40 shadow-lg shadow-cyan-500/50" : "bg-gray-700/50 border-gray-600 z-30 hover:bg-gray-600/70"}`}
+                        style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                      >
+                        <span
+                          className={`text-[8px] font-bold px-1 truncate select-none ${isSelected ? "text-white" : "text-gray-300"}`}
+                        >
+                          {ZOOM_PRESETS.find((p) => p.id === evt.type)?.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* 2. BOTTOM CONTROL BAR */}
-      <div className="w-full px-4 pb-4 pt-2 bg-transparent">
-        <div className="relative w-full max-w-4xl mx-auto flex flex-col gap-2">
-          {/* SWITCH ROW */}
-          <div className="flex items-center justify-center gap-3 px-2 mb-1">
-            <span
-              className={`text-[10px] uppercase font-bold tracking-wider ${
-                extractionMode === "auto" ? "text-teal-400" : "text-gray-600"
-              }`}
-            >
-              Auto
-            </span>
-            <Switch
-              checked={extractionMode === "custom"}
-              onCheckedChange={(c: boolean) =>
-                setExtractionMode(c ? "custom" : "auto")
-              }
-              // Switch color matches Teal theme
-              className="bg-gray-700 data-[state=checked]:bg-cyan-500 border-2 border-transparent"
-            />
-            <span
-              className={`text-[10px] uppercase font-bold tracking-wider ${
-                extractionMode === "custom" ? "text-teal-400" : "text-gray-600"
-              }`}
-            >
-              Custom
-            </span>
-          </div>
-
-          {/* Input Bar */}
-          <div className="w-full p-1 rounded-xl flex items-start gap-3">
+      {/* ─── FIXED BOTTOM INPUT BAR (Minimalist UI) ─── */}
+      <div className="absolute bottom-0 w-full bg-gradient-to-t from-black via-black/90 to-transparent pt-10 pb-4 px-4 z-50">
+        <div className="relative w-full max-w-4xl mx-auto">
+          <div className="w-full bg-gray-900/60 backdrop-blur-md p-1.5 rounded-2xl flex items-center gap-2 border border-gray-800 shadow-2xl">
             {/* Upload Button */}
             <div className="flex-shrink-0 relative">
               <Input
                 ref={fileInputRef}
                 type="file"
                 accept="video/*"
-                onChange={handleVideoFileChange}
+                onChange={handleFileSelect}
                 className="hidden"
-                disabled={isLoading}
+                disabled={isProcessing || isExporting}
               />
               <Label
                 onClick={() => fileInputRef.current?.click()}
                 className={buttonVariants({
                   variant: "outline",
                   size: "icon",
-                  className: `cursor-pointer h-12 w-12 md:h-14 md:w-14 flex flex-col items-center justify-center text-xs hover:border-cyan-500 hover:text-cyan-400 border-gray-700 bg-gray-800/50 rounded-lg transition-all ${
-                    videoPreviewUrl ? "border-cyan-500 text-cyan-500" : ""
+                  className: `cursor-pointer h-12 w-12 flex items-center justify-center hover:border-cyan-500 hover:text-cyan-400 border-gray-700 bg-black/50 rounded-xl transition-all ${
+                    mediaSrc
+                      ? "border-cyan-500/50 text-cyan-500"
+                      : "text-gray-400"
                   }`,
                 })}
               >
-                <UploadCloud className="h-5 w-5 md:h-6 md:w-6" />
+                <UploadCloud className="h-5 w-5" />
               </Label>
             </div>
 
-            {/* Prompt Box Container */}
+            {/* Status Indicator */}
             <div className="flex-grow relative flex items-center">
               <Textarea
-                disabled={true}
+                disabled
                 value={
-                  isMobile
-                    ? "Upload"
-                    : extractionMode === "auto"
-                    ? "Extracts Frames"
-                    : "Select Frames"
+                  !mediaSrc
+                    ? "Upload a video to start..."
+                    : isProcessing
+                      ? progress
+                      : isExporting
+                        ? `Exporting: ${exportProgress}%`
+                        : "Ready to Auto-Zoom or Export"
                 }
-                className="flex-grow bg-gray-900/30 border border-gray-800 rounded-lg resize-none text-base text-gray-500 pl-4 pr-32 py-3.5 self-center min-h-[54px] cursor-not-allowed select-none"
+                className="flex-grow bg-black/30 border-none rounded-xl resize-none text-sm text-gray-400 pl-4 pr-32 py-3.5 self-center h-12 cursor-not-allowed select-none"
                 rows={1}
               />
 
-              {/* Generate Button */}
-              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center">
-                <Button
-                  onClick={handleGenerateClick}
-                  disabled={isLoading || !videoPreviewUrl}
-                  // Unified Teal Gradient
-                  className={`h-9 px-4 rounded-full flex items-center justify-center gap-2 text-white text-xs transition-all shadow-lg ${
-                    isLoading || !videoPreviewUrl
-                      ? "bg-gray-700 text-gray-500 cursor-not-allowed"
-                      : "bg-gradient-to-br from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400"
-                  }`}
-                >
-                  {isLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <>
-                      {extractionMode === "auto" ? (
-                        <Sparkles className="w-4 h-4" />
+              {/* Action Buttons */}
+              <div className="absolute right-1.5 top-1/2 transform -translate-y-1/2 flex items-center gap-1.5">
+                {mediaSrc && (
+                  <>
+                    <Button
+                      onClick={handleAutoGenerate}
+                      disabled={isProcessing || isExporting}
+                      className={`h-9 px-3 rounded-lg flex items-center justify-center gap-1.5 text-white text-xs transition-all shadow-md ${
+                        isProcessing || isExporting
+                          ? "bg-gray-800 text-gray-500"
+                          : "bg-gray-800 hover:bg-gray-700 hover:text-cyan-400"
+                      }`}
+                    >
+                      {isProcessing ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
                       ) : (
-                        <Settings2 className="w-4 h-4" />
+                        <Wand2 className="w-3.5 h-3.5" />
                       )}
-                      <span className="hidden md:inline font-semibold">
-                        {extractionMode === "auto" ? "Extract" : "Customize"}
+                      <span className="hidden sm:inline font-semibold">
+                        Auto
                       </span>
-                      <span className="md:hidden font-semibold">Go</span>
-                    </>
-                  )}
-                </Button>
+                    </Button>
+                    <Button
+                      onClick={handleExport}
+                      disabled={
+                        isProcessing || isExporting || zoomEvents.length === 0
+                      }
+                      className={`h-9 px-4 rounded-lg flex items-center justify-center gap-1.5 text-white text-xs transition-all shadow-md ${
+                        isProcessing || isExporting || zoomEvents.length === 0
+                          ? "bg-gray-800 text-gray-500 opacity-50"
+                          : "bg-linear-to-br from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400"
+                      }`}
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span className="font-semibold">Export</span>
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           </div>
         </div>
       </div>
-
-      {/* --- CUSTOM EXTRACTION MODAL --- */}
-      <Dialog open={isCustomModalOpen} onOpenChange={setIsCustomModalOpen}>
-        <DialogContent className="border-white/10 bg-slate-900 text-gray-200 max-w-4xl w-[95vw]">
-          <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
-              <Frame className="w-5 h-5 text-teal-500" />
-              Custom Frame Extractor
-            </DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Play the video to the desired moment and click "Capture Frame".
-            </DialogDescription>
-          </DialogHeader>
-
-          {/* Video Player in Modal */}
-          <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden border border-gray-800">
-            {videoPreviewUrl && (
-              <video
-                ref={customVideoRef}
-                src={videoPreviewUrl}
-                controls
-                className="w-full h-full object-contain"
-              />
-            )}
-          </div>
-
-          <DialogFooter className="flex items-center justify-between gap-4 mt-4">
-            <div className="flex-grow text-xs text-gray-500">
-              {extractedFrames.length} frames captured in this session.
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                onClick={() => setIsCustomModalOpen(false)}
-              >
-                Done
-              </Button>
-              <Button
-                onClick={handleCustomCapture}
-                className="bg-teal-600 hover:bg-teal-500 text-white gap-2"
-              >
-                <Camera className="w-4 h-4" />
-                Capture Frame
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
-};
-
-export default FrameExtractorPage;
+}

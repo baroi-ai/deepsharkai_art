@@ -523,7 +523,7 @@ const BillingPage = () => {
 
       {/* --- TRANSACTION HISTORY --- */}
       {isLoggedIn && (
-        <section className="space-y-4 pt-8 md:pt-10 border-t border-white/5">
+        <section className="no-sidebar-swipe space-y-4 pt-8 md:pt-10 border-t border-white/5">
           <div className="flex items-center gap-2">
             <History className="h-5 w-5 text-gray-400" />
             <h2 className="text-lg md:text-xl font-bold text-gray-200">

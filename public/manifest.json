@@ -1,6 +1,6 @@
 {
-  "short_name": "Sharky AI",
-  "name": "Sharky AI",
+  "short_name": "DeepShark AI",
+  "name": "DeepShark AI",
   "icons": [
     {
       "src": "favicon.ico",
@@ -8,12 +8,12 @@
       "type": "image/x-icon"
     },
     {
-      "src": "logo.png",
+      "src": "icon.png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "logo.png",
+      "src": "icon.png",
       "type": "image/png",
       "sizes": "512x512"
     }

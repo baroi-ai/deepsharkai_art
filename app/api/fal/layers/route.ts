@@ -7,14 +7,23 @@ import { fal } from "@fal-ai/client";
 import { v4 as uuidv4 } from "uuid";
 import { uploadToR2 } from "@/lib/r2";
 
-// Configure Fal
 fal.config({
   credentials: process.env.FAL_KEY,
 });
 
+/** Convert a base64 data URL to a Buffer + mime type */
+function dataURLtoBuffer(dataUrl: string): {
+  buffer: Buffer;
+  mimeType: string;
+} {
+  const [header, base64Data] = dataUrl.split(",");
+  const mimeType = header.match(/:(.*?);/)?.[1] ?? "image/jpeg";
+  return { buffer: Buffer.from(base64Data, "base64"), mimeType };
+}
+
 export async function POST(req: Request) {
   try {
-    // 1. Authenticate
+    // 1. Auth
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -24,12 +33,10 @@ export async function POST(req: Request) {
     const { input } = await req.json();
 
     const modelId = "fal-ai/qwen-image-layered";
-
-    // Calculate cost: 2 coins per layer
     const numLayers = Number(input.num_layers) || 4;
     const totalCost = numLayers * 5;
 
-    // 2. Check Credits
+    // 2. Check credits
     const [user] = await db
       .select({ credits: users.credits })
       .from(users)
@@ -42,93 +49,94 @@ export async function POST(req: Request) {
       );
     }
 
-    // 3. Prepare Input
-    const sourceImageUrl = input.image_url;
+    const sourceImageUrl: string = input.image_url;
     if (!sourceImageUrl) {
       return NextResponse.json({ error: "No image provided" }, { status: 400 });
     }
 
-    console.log(`🧩 Decomposing with: ${modelId} (${numLayers} layers)`);
+    // 3. If the client sent a base64 data URL, upload it to Fal storage
+    //    server-side (where the real FAL_KEY is available) so Fal gets
+    //    a proper HTTPS URL — base64 blobs cause silent timeouts in fal.subscribe
+    let falImageUrl: string;
 
-    // 4. Generate (Wait for Fal to process)
+    if (sourceImageUrl.startsWith("data:")) {
+      console.log("📤 Converting base64 → Fal storage URL…");
+      const { buffer, mimeType } = dataURLtoBuffer(sourceImageUrl);
+      const ext = mimeType.split("/")[1] ?? "jpg";
+      const blob = new Blob([new Uint8Array(buffer)], { type: mimeType });
+      const file = new File([blob], `upload.${ext}`, { type: mimeType });
+      falImageUrl = await fal.storage.upload(file);
+      console.log("✅ Uploaded to Fal storage:", falImageUrl);
+    } else {
+      // Already a real URL (e.g. from a previous R2 upload)
+      falImageUrl = sourceImageUrl;
+    }
+
+    console.log(`🧩 Decomposing: ${modelId} | layers: ${numLayers}`);
+
+    // 4. Call Fal with a real URL
     const result: any = await fal.subscribe(modelId, {
       input: {
-        image_url: sourceImageUrl,
+        image_url: falImageUrl,
         num_layers: numLayers,
         prompt: input.prompt || "decompose image layers",
-        output_format: "png", // PNG supports transparency (crucial for layers)
+        output_format: "png",
       },
       logs: true,
     });
 
-    // 5. Extract Result URLs
+    // 5. Extract result URLs
     if (!result.data?.images || result.data.images.length === 0) {
       throw new Error("Decomposition failed: No layers returned.");
     }
 
-    // Array of strings (Fal URLs)
     const layerRemoteUrls: string[] = result.data.images.map(
       (img: any) => img.url,
     );
 
-    // 6. ✅ FAST PATH: Save Fal URLs as 'fallbackUrl' & Deduct Credits
-    // We create a unique Group ID to link these layers together in the future if needed
+    // 6. Fast path: deduct credits + save to DB
     const groupId = uuidv4();
 
     await db.transaction(async (tx: any) => {
-      // Deduct Credits ONCE
       await tx
         .update(users)
         .set({ credits: sql`${users.credits} - ${totalCost}` })
         .where(eq(users.id, userId));
 
-      // Insert a row for EACH layer
       for (let i = 0; i < layerRemoteUrls.length; i++) {
         await tx.insert(imageGenerations).values({
-          id: `${groupId}-${i}`, // Unique ID for each layer
-          userId: userId,
+          id: `${groupId}-${i}`,
+          userId,
           prompt: `Layer ${i + 1}/${layerRemoteUrls.length} (Decomposed)`,
           model: "Deepshark Decompose",
-          //model: modelId,
-          imageUrl: layerRemoteUrls[i], // 1. Main URL (Fal initially)
-          fallbackUrl: layerRemoteUrls[i], // 2. ✅ Backup URL
-          cost: i === 0 ? totalCost : 0, // Attribute cost to first image only
+          imageUrl: layerRemoteUrls[i],
+          fallbackUrl: layerRemoteUrls[i],
+          cost: i === 0 ? totalCost : 0,
           status: "completed",
         });
       }
     });
 
-    // 7. ✅ BACKGROUND TASK: Upload ALL Layers to R2
+    // 7. Background: upload all layers to R2
     (async () => {
       try {
         console.log(
-          `Started background upload for ${layerRemoteUrls.length} layers...`,
+          `⬆️ Background R2 upload for ${layerRemoteUrls.length} layers…`,
         );
-
-        // Map over urls and upload them in parallel
         await Promise.all(
           layerRemoteUrls.map(async (remoteUrl, index) => {
             const res = await fetch(remoteUrl);
             if (!res.ok) return;
-
             const buffer = Buffer.from(await res.arrayBuffer());
-            // Organized path: users/{id}/decomposed/{groupId}/layer-X.png
-            const filename = `users/${userId}/image/decomposed/${groupId}/layer-${
-              index + 1
-            }.png`;
-
-            // Upload to R2
+            const filename = `users/${userId}/image/decomposed/${groupId}/layer-${index + 1}.png`;
             const r2Url = await uploadToR2(buffer, filename);
-
-            // Update DB with permanent R2 URL
             await db
               .update(imageGenerations)
               .set({ imageUrl: r2Url })
               .where(eq(imageGenerations.id, `${groupId}-${index}`));
           }),
         );
-
-        console.log("✅ Background Decomposition upload complete");
+        console.log("✅ Background R2 upload complete");
       } catch (err) {
         console.error("Background Upload Error:", err);
       }
@@ -136,7 +144,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      layers: layerRemoteUrls, // Send Fal URLs immediately
+      layers: layerRemoteUrls,
       remainingCredits: (user.credits || 0) - totalCost,
     });
   } catch (error: any) {

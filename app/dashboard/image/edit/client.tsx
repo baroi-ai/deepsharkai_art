@@ -36,6 +36,14 @@ import {
   Bold,
   Italic,
   Underline,
+  Scissors,
+  Zap,
+  Brush,
+  Undo,
+  Eye,
+  Layers,
+  ChevronDown,
+  Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Slider } from "@/components/ui/slider";
@@ -191,6 +199,7 @@ const buildCssFilter = (adj: Adjustments): string =>
   ]
     .filter(Boolean)
     .join(" ");
+
 const applyAdjustmentsToCanvas = (
   img: HTMLImageElement,
   adj: Adjustments,
@@ -308,14 +317,14 @@ interface TextLayer {
   text: string;
   variant: TextVariant;
   x: number;
-  y: number; // % of container
+  y: number;
   color: string;
   fontFamily: FontFamily;
   align: TextAlign;
   bold: boolean;
   italic: boolean;
   underline: boolean;
-  fontSize: number; // 0 = variant default
+  fontSize: number;
   opacity: number;
   rotation: number;
   shadow: boolean;
@@ -325,6 +334,8 @@ interface TextLayer {
   letterSpacing: number;
   strokeColor: string;
   strokeWidth: number;
+  noWrap: boolean;
+  maxWidth: number;
 }
 
 const VARIANT_DEFAULTS: Record<
@@ -360,13 +371,11 @@ const TEXT_COLORS = [
   "#EF4444",
 ];
 
-// ─── STYLE PRESETS ────────────────────────────────────────────────────────────
 interface StylePreset {
   name: string;
-  thumb: string; // inline CSS description for thumbnail background
+  thumb: string;
   patch: Partial<TextLayer>;
 }
-
 const STYLE_PRESETS: StylePreset[] = [
   {
     name: "Clean White",
@@ -582,10 +591,454 @@ const makeLayer = (partial: Partial<TextLayer> = {}): TextLayer => ({
   letterSpacing: 0,
   strokeColor: "",
   strokeWidth: 0,
+  noWrap: true,
+  maxWidth: 60,
   ...partial,
 });
 
-// ─── SINGLE TEXT NODE (draggable) ─────────────────────────────────────────────
+// ─── OVERLAY IMAGE ────────────────────────────────────────────────────────────
+interface OverlayImage {
+  id: string;
+  src: string;
+  x: number; // % of container
+  y: number;
+  width: number; // % of container
+  height: number;
+  opacity: number;
+  rotation: number;
+}
+
+let _overlayCounter = 0;
+const makeOverlay = (src: string): OverlayImage => ({
+  id: `ov-${++_overlayCounter}-${Math.random().toString(36).slice(2, 6)}`,
+  src,
+  x: 20,
+  y: 20,
+  width: 40,
+  height: 40,
+  opacity: 100,
+  rotation: 0,
+});
+
+// ─── OVERLAY NODE ─────────────────────────────────────────────────────────────
+interface OverlayNodeProps {
+  overlay: OverlayImage;
+  selected: boolean;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  onSelect: () => void;
+  onUpdate: (p: Partial<OverlayImage>) => void;
+  onDelete: () => void;
+}
+
+const OVERLAY_CORNERS = [
+  { id: "nw", cx: 0, cy: 0 },
+  { id: "ne", cx: 1, cy: 0 },
+  { id: "se", cx: 1, cy: 1 },
+  { id: "sw", cx: 0, cy: 1 },
+] as const;
+
+const OverlayNode: React.FC<OverlayNodeProps> = ({
+  overlay,
+  selected,
+  containerRef,
+  onSelect,
+  onUpdate,
+  onDelete,
+}) => {
+  const nodeRef = useRef<HTMLDivElement>(null);
+
+  const onBodyMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onSelect();
+    const rect = containerRef.current!.getBoundingClientRect();
+    const ox = overlay.x,
+      oy = overlay.y,
+      sx = e.clientX,
+      sy = e.clientY;
+    const move = (ev: MouseEvent) => {
+      onUpdate({
+        x: Math.max(
+          0,
+          Math.min(
+            100 - overlay.width,
+            ox + ((ev.clientX - sx) / rect.width) * 100,
+          ),
+        ),
+        y: Math.max(
+          0,
+          Math.min(
+            100 - overlay.height,
+            oy + ((ev.clientY - sy) / rect.height) * 100,
+          ),
+        ),
+      });
+    };
+    const up = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  };
+
+  const onCornerMouseDown = (e: React.MouseEvent, cx: number, cy: number) => {
+    e.stopPropagation();
+    const rect = containerRef.current!.getBoundingClientRect();
+    const sw = overlay.width,
+      sh = overlay.height,
+      sox = overlay.x,
+      soy = overlay.y;
+    const startX = e.clientX,
+      startY = e.clientY;
+    const move = (ev: MouseEvent) => {
+      const dx = ((ev.clientX - startX) / rect.width) * 100;
+      const dy = ((ev.clientY - startY) / rect.height) * 100;
+      let nx = sox,
+        ny = soy,
+        nw = sw,
+        nh = sh;
+      if (cx === 0) {
+        nx = sox + dx;
+        nw = Math.max(5, sw - dx);
+      } else {
+        nw = Math.max(5, sw + dx);
+      }
+      if (cy === 0) {
+        ny = soy + dy;
+        nh = Math.max(5, sh - dy);
+      } else {
+        nh = Math.max(5, sh + dy);
+      }
+      onUpdate({ x: nx, y: ny, width: nw, height: nh });
+    };
+    const up = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  };
+
+  const onRotateMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const node = nodeRef.current;
+    if (!node) return;
+    const box = node.getBoundingClientRect();
+    const cx = box.left + box.width / 2,
+      cy = box.top + box.height / 2;
+    const startAngle =
+      Math.atan2(e.clientY - cy, e.clientX - cx) * (180 / Math.PI);
+    const startRot = overlay.rotation;
+    const move = (ev: MouseEvent) => {
+      const angle =
+        Math.atan2(ev.clientY - cy, ev.clientX - cx) * (180 / Math.PI);
+      onUpdate({ rotation: Math.round(startRot + angle - startAngle) });
+    };
+    const up = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  };
+
+  return (
+    <div
+      ref={nodeRef}
+      onMouseDown={onBodyMouseDown}
+      style={{
+        position: "absolute",
+        left: `${overlay.x}%`,
+        top: `${overlay.y}%`,
+        width: `${overlay.width}%`,
+        height: `${overlay.height}%`,
+        transform: `rotate(${overlay.rotation}deg)`,
+        opacity: overlay.opacity / 100,
+        cursor: "move",
+        userSelect: "none",
+        zIndex: selected ? 40 : 30,
+      }}
+    >
+      <img
+        src={overlay.src}
+        alt="overlay"
+        draggable={false}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          display: "block",
+          pointerEvents: "none",
+        }}
+      />
+      {selected && (
+        <>
+          <div
+            className="absolute inset-0 border-2 border-cyan-400 rounded pointer-events-none"
+            style={{ boxShadow: "0 0 0 1px rgba(6,182,212,0.3)" }}
+          />
+          {OVERLAY_CORNERS.map((h) => (
+            <div
+              key={h.id}
+              onMouseDown={(e) => onCornerMouseDown(e, h.cx, h.cy)}
+              style={{
+                position: "absolute",
+                left: `calc(${h.cx * 100}% - 5px)`,
+                top: `calc(${h.cy * 100}% - 5px)`,
+                width: 10,
+                height: 10,
+                background: "#fff",
+                border: "2px solid #06B6D4",
+                borderRadius: "50%",
+                cursor:
+                  h.id === "nw" || h.id === "se"
+                    ? "nwse-resize"
+                    : "nesw-resize",
+                zIndex: 50,
+              }}
+            />
+          ))}
+          {/* rotation stem + handle */}
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "100%",
+              width: 1.5,
+              height: 16,
+              background: "#06B6D4",
+              transform: "translateX(-50%)",
+              pointerEvents: "none",
+            }}
+          />
+          <div
+            onMouseDown={onRotateMouseDown}
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "calc(100% + 16px)",
+              transform: "translateX(-50%)",
+              width: 12,
+              height: 12,
+              background: "#06B6D4",
+              border: "2px solid #fff",
+              borderRadius: "50%",
+              cursor: "grab",
+              zIndex: 50,
+              boxShadow: "0 1px 6px rgba(6,182,212,0.7)",
+            }}
+          />
+          <button
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            style={{
+              position: "absolute",
+              top: -10,
+              right: -10,
+              width: 20,
+              height: 20,
+              background: "#EF4444",
+              border: "2px solid #fff",
+              borderRadius: "50%",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 50,
+              fontSize: 10,
+              color: "#fff",
+              fontWeight: "bold",
+            }}
+          >
+            ×
+          </button>
+        </>
+      )}
+    </div>
+  );
+};
+
+// ─── OVERLAY PANEL (shown in overlay mode) ────────────────────────────────────
+interface OverlayPanelProps {
+  overlays: OverlayImage[];
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+  onUpdate: (id: string, p: Partial<OverlayImage>) => void;
+  onDelete: (id: string) => void;
+  onAdd: (src: string) => void;
+  onApply: () => void;
+  onCancel: () => void;
+}
+
+const OverlayPanel: React.FC<OverlayPanelProps> = ({
+  overlays,
+  selectedId,
+  onSelect,
+  onUpdate,
+  onDelete,
+  onAdd,
+  onApply,
+  onCancel,
+}) => {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const sel = overlays.find((o) => o.id === selectedId) ?? null;
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => onAdd(reader.result as string);
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  return (
+    <div className="w-full max-w-5xl mx-auto flex flex-col gap-3 animate-in fade-in duration-200">
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
+            <Layers className="w-3.5 h-3.5 text-cyan-400" /> Overlay Images
+          </span>
+          <span className="text-[10px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded-full">
+            {overlays.length}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* thumbnail row */}
+          {overlays.map((o, i) => (
+            <button
+              key={o.id}
+              onClick={() => onSelect(o.id)}
+              className={`w-8 h-8 rounded-lg overflow-hidden border-2 transition-all ${selectedId === o.id ? "border-cyan-400" : "border-gray-600 hover:border-gray-400"}`}
+            >
+              <img src={o.src} alt="" className="w-full h-full object-cover" />
+            </button>
+          ))}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFile}
+          />
+          <button
+            onClick={() => fileRef.current?.click()}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/25 transition-all"
+          >
+            <Plus className="w-3.5 h-3.5" /> Add Image
+          </button>
+          {sel && (
+            <button
+              onClick={() => onDelete(sel.id)}
+              className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-gray-800 transition-all"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {overlays.length === 0 ? (
+        <div className="text-center py-6 text-gray-600 text-xs">
+          Click <strong className="text-gray-500">Add Image</strong> to place an
+          image over your photo.
+        </div>
+      ) : !sel ? (
+        <div className="text-center py-4 text-gray-600 text-xs">
+          Click an image on the canvas to select it.
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+          {[
+            {
+              label: "Opacity",
+              val: sel.opacity,
+              min: 10,
+              max: 100,
+              step: 1,
+              key: "opacity",
+            },
+            {
+              label: "Rotation",
+              val: sel.rotation,
+              min: -180,
+              max: 180,
+              step: 1,
+              key: "rotation",
+            },
+            {
+              label: "Width",
+              val: sel.width,
+              min: 5,
+              max: 100,
+              step: 1,
+              key: "width",
+            },
+            {
+              label: "Height",
+              val: sel.height,
+              min: 5,
+              max: 100,
+              step: 1,
+              key: "height",
+            },
+          ].map((s) => (
+            <div key={s.key} className="flex items-center gap-2">
+              <span className="text-[11px] text-gray-500 w-16 shrink-0">
+                {s.label}
+              </span>
+              <Slider
+                value={[s.val]}
+                onValueChange={([v]) => onUpdate(sel.id, { [s.key]: v })}
+                min={s.min}
+                max={s.max}
+                step={s.step}
+                className="no-sidebar-swipe flex-1"
+              />
+              <span className="text-[10px] font-mono text-cyan-400/80 w-7 text-right shrink-0">
+                {Math.round(s.val)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center justify-end gap-2 pt-1 border-t border-gray-800">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onCancel}
+          className="h-9 px-4 rounded-full text-gray-400 hover:text-white border border-gray-700 text-xs gap-1.5"
+        >
+          <X className="w-3.5 h-3.5" /> Cancel
+        </Button>
+        <Button
+          size="sm"
+          onClick={onApply}
+          disabled={overlays.length === 0}
+          className="h-9 px-5 rounded-full font-medium text-xs gap-1.5 bg-linear-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white shadow-lg shadow-cyan-500/20 disabled:opacity-40"
+        >
+          <Check className="w-3.5 h-3.5" /> Apply Overlay
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+// ─── SINGLE TEXT NODE ─────────────────────────────────────────────────────────
+const RESIZE_HANDLES = [
+  { id: "nw", x: 0, y: 0, cursor: "nw-resize" },
+  { id: "n", x: 0.5, y: 0, cursor: "n-resize" },
+  { id: "ne", x: 1, y: 0, cursor: "ne-resize" },
+  { id: "e", x: 1, y: 0.5, cursor: "e-resize" },
+  { id: "se", x: 1, y: 1, cursor: "se-resize" },
+  { id: "s", x: 0.5, y: 1, cursor: "s-resize" },
+  { id: "sw", x: 0, y: 1, cursor: "sw-resize" },
+  { id: "w", x: 0, y: 0.5, cursor: "w-resize" },
+] as const;
+
 interface TextNodeProps {
   layer: TextLayer;
   selected: boolean;
@@ -608,51 +1061,82 @@ const TextNode: React.FC<TextNodeProps> = ({
   const [editing, setEditing] = useState(false);
   const [editVal, setEditVal] = useState(layer.text);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const dragRef = useRef<{
-    sx: number;
-    sy: number;
-    ox: number;
-    oy: number;
-  } | null>(null);
-
+  const nodeRef = useRef<HTMLDivElement>(null);
   const def = VARIANT_DEFAULTS[layer.variant];
   const fs = layer.fontSize || def.fontSize;
   const fw = layer.bold ? "700" : def.fontWeight;
+  const HD = 10;
 
-  const onMouseDown = (e: React.MouseEvent) => {
+  const onBodyMouseDown = (e: React.MouseEvent) => {
     if (editing) return;
     e.stopPropagation();
     onSelect();
     const rect = containerRef.current!.getBoundingClientRect();
-    dragRef.current = {
-      sx: e.clientX,
-      sy: e.clientY,
-      ox: layer.x,
-      oy: layer.y,
-    };
+    const ox = layer.x,
+      oy = layer.y,
+      sx = e.clientX,
+      sy = e.clientY;
     const move = (ev: MouseEvent) => {
-      if (!dragRef.current) return;
       onUpdate({
         x: Math.max(
           2,
-          Math.min(
-            98,
-            dragRef.current.ox +
-              ((ev.clientX - dragRef.current.sx) / rect.width) * 100,
-          ),
+          Math.min(98, ox + ((ev.clientX - sx) / rect.width) * 100),
         ),
         y: Math.max(
           2,
-          Math.min(
-            98,
-            dragRef.current.oy +
-              ((ev.clientY - dragRef.current.sy) / rect.height) * 100,
-          ),
+          Math.min(98, oy + ((ev.clientY - sy) / rect.height) * 100),
         ),
       });
     };
     const up = () => {
-      dragRef.current = null;
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  };
+
+  const onResizeMouseDown = (e: React.MouseEvent, handleId: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const startX = e.clientX,
+      startFS = fs;
+    const isHoriz = handleId.includes("e") || handleId.includes("w");
+    const sign = handleId.includes("e") || handleId.includes("s") ? 1 : -1;
+    const startY = e.clientY;
+    const move = (ev: MouseEvent) => {
+      const dx = (ev.clientX - startX) * sign,
+        dy = (ev.clientY - startY) * sign;
+      const delta = isHoriz ? dx : dy;
+      onUpdate({
+        fontSize: Math.max(8, Math.min(200, Math.round(startFS + delta * 0.4))),
+      });
+    };
+    const up = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  };
+
+  const onRotateMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const node = nodeRef.current;
+    if (!node) return;
+    const box = node.getBoundingClientRect();
+    const cx = box.left + box.width / 2,
+      cy = box.top + box.height / 2;
+    const startAngle =
+      Math.atan2(e.clientY - cy, e.clientX - cx) * (180 / Math.PI);
+    const startRot = layer.rotation;
+    const move = (ev: MouseEvent) => {
+      const angle =
+        Math.atan2(ev.clientY - cy, ev.clientX - cx) * (180 / Math.PI);
+      onUpdate({ rotation: Math.round(startRot + angle - startAngle) });
+    };
+    const up = () => {
       window.removeEventListener("mousemove", move);
       window.removeEventListener("mouseup", up);
     };
@@ -667,19 +1151,15 @@ const TextNode: React.FC<TextNodeProps> = ({
     setTimeout(() => {
       if (!inputRef.current) return;
       inputRef.current.focus();
-      // auto-size on open
       inputRef.current.style.height = "auto";
       inputRef.current.style.height = inputRef.current.scrollHeight + "px";
     }, 20);
   };
-
   const commit = () => {
     setEditing(false);
     if (editVal.trim()) onUpdate({ text: editVal });
   };
-
   const handleEditKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Shift+Enter OR Escape = commit/close; plain Enter = new line (default textarea behaviour)
     if (e.key === "Escape") {
       e.preventDefault();
       commit();
@@ -688,12 +1168,9 @@ const TextNode: React.FC<TextNodeProps> = ({
       e.preventDefault();
       commit();
     }
-    // plain Enter: do nothing special — browser inserts \n naturally
   };
-
   const handleEditChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setEditVal(e.target.value);
-    // auto-grow
     e.target.style.height = "auto";
     e.target.style.height = e.target.scrollHeight + "px";
   };
@@ -704,10 +1181,14 @@ const TextNode: React.FC<TextNodeProps> = ({
         .toString(16)
         .padStart(2, "0")
     : "";
+  const displayText = layer.noWrap
+    ? layer.text.replace(/\n/g, " ")
+    : layer.text;
 
   return (
     <div
-      onMouseDown={onMouseDown}
+      ref={nodeRef}
+      onMouseDown={onBodyMouseDown}
       onDoubleClick={onDblClick}
       style={{
         position: "absolute",
@@ -736,28 +1217,35 @@ const TextNode: React.FC<TextNodeProps> = ({
           layer.strokeWidth > 0
             ? `${layer.strokeWidth}px ${layer.strokeColor}`
             : "none",
-        whiteSpace: "pre-wrap",
-        maxWidth: "85%",
+        whiteSpace: layer.noWrap ? "nowrap" : "pre-wrap",
+        maxWidth: layer.noWrap ? "none" : `${layer.maxWidth}%`,
         lineHeight: 1.25,
+        padding: selected ? "6px 8px" : "0px",
+        boxSizing: "border-box",
       }}
     >
-      {/* Selection ring */}
       {selected && !editing && (
         <div
           className="absolute pointer-events-none"
-          style={{ inset: -6, border: "2px dashed #06B6D4", borderRadius: 4 }}
+          style={{
+            inset: 0,
+            border: "1.5px solid #7C3AED",
+            borderRadius: 3,
+            boxShadow: "0 0 0 1px rgba(124,58,237,0.25)",
+          }}
         />
       )}
-      {/* Floating action bar */}
       {selected && !editing && (
         <div
-          className="absolute flex items-center gap-0.5 bg-gray-900/90 backdrop-blur border border-gray-700 rounded-md px-1 py-0.5 shadow-lg z-50"
+          className="absolute flex items-center gap-0.5 bg-gray-900/90 backdrop-blur border border-gray-700 rounded-md px-1 py-0.5 shadow-lg"
           style={{
-            top: -32,
+            top: -30,
             left: "50%",
             transform: "translateX(-50%)",
             whiteSpace: "nowrap",
+            zIndex: 60,
           }}
+          onMouseDown={(e) => e.stopPropagation()}
         >
           <button
             onMouseDown={(e) => {
@@ -781,6 +1269,64 @@ const TextNode: React.FC<TextNodeProps> = ({
           </button>
         </div>
       )}
+      {selected &&
+        !editing &&
+        RESIZE_HANDLES.map((h) => (
+          <div
+            key={h.id}
+            onMouseDown={(e) => onResizeMouseDown(e, h.id)}
+            style={{
+              position: "absolute",
+              width: HD,
+              height: HD,
+              background: "#FFFFFF",
+              border: "2px solid #7C3AED",
+              borderRadius: "50%",
+              cursor: h.cursor,
+              zIndex: 70,
+              left: `calc(${h.x * 100}% - ${HD / 2}px)`,
+              top: `calc(${h.y * 100}% - ${HD / 2}px)`,
+              boxShadow: "0 1px 4px rgba(0,0,0,0.5)",
+              pointerEvents: "all",
+            }}
+          />
+        ))}
+      {selected && !editing && (
+        <>
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "100%",
+              width: 1.5,
+              height: 18,
+              background: "#7C3AED",
+              transform: "translateX(-50%)",
+              pointerEvents: "none",
+              zIndex: 65,
+            }}
+          />
+          <div
+            onMouseDown={onRotateMouseDown}
+            title="Rotate"
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "calc(100% + 18px)",
+              transform: "translateX(-50%)",
+              width: 12,
+              height: 12,
+              background: "#7C3AED",
+              border: "2px solid #fff",
+              borderRadius: "50%",
+              cursor: "grab",
+              zIndex: 70,
+              boxShadow: "0 1px 6px rgba(124,58,237,0.7)",
+              pointerEvents: "all",
+            }}
+          />
+        </>
+      )}
       {editing ? (
         <div className="flex flex-col gap-1">
           <textarea
@@ -791,7 +1337,7 @@ const TextNode: React.FC<TextNodeProps> = ({
             onKeyDown={handleEditKeyDown}
             style={{
               background: "rgba(0,0,0,0.6)",
-              border: "2px solid #06B6D4",
+              border: "2px solid #7C3AED",
               borderRadius: 4,
               color: layer.color === "transparent" ? "#fff" : layer.color,
               fontFamily: "inherit",
@@ -808,21 +1354,23 @@ const TextNode: React.FC<TextNodeProps> = ({
               padding: "6px 10px",
               lineHeight: 1.25,
               display: "block",
+              whiteSpace: layer.noWrap ? "nowrap" : "pre-wrap",
             }}
             rows={1}
             className="no-sidebar-swipe"
           />
-          {/* hint */}
           <div
             style={{
               fontSize: 10,
-              color: "rgba(6,182,212,0.7)",
+              color: "rgba(124,58,237,0.8)",
               textAlign: "center",
               pointerEvents: "none",
               lineHeight: 1,
             }}
           >
-            Enter = new line · Shift+Enter or Esc = done
+            {layer.noWrap
+              ? "Single line · Esc = done"
+              : "Enter = new line · Shift+Enter or Esc = done"}
           </div>
         </div>
       ) : (
@@ -833,14 +1381,14 @@ const TextNode: React.FC<TextNodeProps> = ({
               : {}
           }
         >
-          {layer.text}
+          {displayText}
         </span>
       )}
     </div>
   );
 };
 
-// ─── TEXT PANEL (new design: preset-first, no layers tab) ─────────────────────
+// ─── TEXT PANEL ───────────────────────────────────────────────────────────────
 interface TextPanelProps {
   layers: TextLayer[];
   selectedId: string | null;
@@ -893,15 +1441,14 @@ const TextPanel: React.FC<TextPanelProps> = ({
     canvas.height = img.naturalHeight;
     const ctx = canvas.getContext("2d")!;
     ctx.drawImage(img, 0, 0);
-    const sx = img.naturalWidth / container.clientWidth;
-    const sy = img.naturalHeight / container.clientHeight;
-
+    const sx = img.naturalWidth / container.clientWidth,
+      sy = img.naturalHeight / container.clientHeight;
     layers.forEach((layer) => {
       const def = VARIANT_DEFAULTS[layer.variant];
       const fs = (layer.fontSize || def.fontSize) * sx;
       const fw = layer.bold ? "700" : def.fontWeight;
-      const x = (layer.x / 100) * img.naturalWidth;
-      const y = (layer.y / 100) * img.naturalHeight;
+      const x = (layer.x / 100) * img.naturalWidth,
+        y = (layer.y / 100) * img.naturalHeight;
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate((layer.rotation * Math.PI) / 180);
@@ -916,7 +1463,9 @@ const TextPanel: React.FC<TextPanelProps> = ({
         ctx.shadowOffsetX = 2 * sx;
         ctx.shadowOffsetY = 2 * sy;
       }
-      const lines = layer.text.split("\n");
+      const lines = layer.noWrap
+        ? [layer.text.replace(/\n/g, " ")]
+        : layer.text.split("\n");
       const lh = fs * 1.25;
       lines.forEach((line, i) => {
         const ly = (i - (lines.length - 1) / 2) * lh;
@@ -976,7 +1525,6 @@ const TextPanel: React.FC<TextPanelProps> = ({
 
   return (
     <div className="w-full max-w-5xl mx-auto flex flex-col gap-3 animate-in fade-in duration-200">
-      {/* Header row */}
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-1 bg-gray-900/60 p-1 rounded-lg border border-gray-800">
           {(["presets", "style"] as const).map((t) => (
@@ -1000,7 +1548,6 @@ const TextPanel: React.FC<TextPanelProps> = ({
           ))}
         </div>
         <div className="flex items-center gap-2">
-          {/* Text selector pills — click to switch active text */}
           <div className="flex items-center gap-1">
             {layers.map((l, i) => (
               <button
@@ -1032,8 +1579,6 @@ const TextPanel: React.FC<TextPanelProps> = ({
           )}
         </div>
       </div>
-
-      {/* ── PRESETS TAB ─────────────────────────────────────────────────────── */}
       {tab === "presets" && (
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 max-h-52 overflow-y-auto pr-1">
           {STYLE_PRESETS.map((preset) => (
@@ -1042,7 +1587,6 @@ const TextPanel: React.FC<TextPanelProps> = ({
               onClick={() => applyPreset(preset)}
               className="flex flex-col items-stretch rounded-xl overflow-hidden border border-gray-700/60 hover:border-cyan-500/50 transition-all group shadow-md hover:shadow-cyan-500/10 hover:scale-[1.03]"
             >
-              {/* Thumbnail */}
               <div
                 className={`${preset.thumb} h-14 flex items-center justify-center px-2`}
               >
@@ -1074,7 +1618,6 @@ const TextPanel: React.FC<TextPanelProps> = ({
                   Aa
                 </span>
               </div>
-              {/* Label */}
               <div className="bg-gray-900 px-2 py-1.5 text-center">
                 <span className="text-[10px] font-medium text-gray-500 group-hover:text-gray-300 transition-colors leading-none">
                   {preset.name}
@@ -1084,8 +1627,6 @@ const TextPanel: React.FC<TextPanelProps> = ({
           ))}
         </div>
       )}
-
-      {/* ── STYLE TAB ───────────────────────────────────────────────────────── */}
       {tab === "style" && (
         <div className="flex flex-col gap-3">
           {!sel ? (
@@ -1095,7 +1636,6 @@ const TextPanel: React.FC<TextPanelProps> = ({
             </div>
           ) : (
             <>
-              {/* Text input */}
               <div className="flex flex-col gap-1">
                 <textarea
                   value={sel.text}
@@ -1104,22 +1644,16 @@ const TextPanel: React.FC<TextPanelProps> = ({
                     e.target.style.height = "auto";
                     e.target.style.height = e.target.scrollHeight + "px";
                   }}
-                  placeholder="Your text… (Enter = new line)"
+                  placeholder={
+                    sel.noWrap
+                      ? "Your text… (single line mode)"
+                      : "Your text… (Enter = new line)"
+                  }
                   rows={2}
                   className="w-full bg-gray-800/80 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-600 px-3 py-2 resize-none focus:outline-none focus:border-cyan-500/60 no-sidebar-swipe overflow-hidden"
                 />
-                <p className="text-[10px] text-gray-600 px-1">
-                  Press{" "}
-                  <kbd className="bg-gray-700 text-gray-400 px-1 rounded text-[9px]">
-                    Enter
-                  </kbd>{" "}
-                  to add a new line
-                </p>
               </div>
-
-              {/* Row 1: variant + font + style toggles + align */}
               <div className="flex items-center gap-2 flex-wrap">
-                {/* Variant */}
                 <div className="flex bg-gray-800 rounded-lg p-0.5">
                   {(["h1", "h2", "p"] as TextVariant[]).map((v) => (
                     <button
@@ -1131,7 +1665,6 @@ const TextPanel: React.FC<TextPanelProps> = ({
                     </button>
                   ))}
                 </div>
-                {/* Font */}
                 <select
                   value={sel.fontFamily}
                   onChange={(e) =>
@@ -1145,7 +1678,6 @@ const TextPanel: React.FC<TextPanelProps> = ({
                     </option>
                   ))}
                 </select>
-                {/* B/I/U */}
                 <div className="flex bg-gray-800 rounded-lg p-0.5">
                   {(
                     [
@@ -1163,7 +1695,6 @@ const TextPanel: React.FC<TextPanelProps> = ({
                     </button>
                   ))}
                 </div>
-                {/* Align */}
                 <div className="flex bg-gray-800 rounded-lg p-0.5">
                   {(
                     [
@@ -1182,8 +1713,6 @@ const TextPanel: React.FC<TextPanelProps> = ({
                   ))}
                 </div>
               </div>
-
-              {/* Row 2: sliders (2-col grid) */}
               <div className="grid grid-cols-2 gap-x-6 gap-y-2">
                 {[
                   {
@@ -1253,8 +1782,6 @@ const TextPanel: React.FC<TextPanelProps> = ({
                   </div>
                 ))}
               </div>
-
-              {/* Row 3: color swatches */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {(
                   [
@@ -1294,8 +1821,6 @@ const TextPanel: React.FC<TextPanelProps> = ({
                   </div>
                 ))}
               </div>
-
-              {/* Shadow toggle */}
               <div className="flex items-center gap-3">
                 <span className="text-[11px] text-gray-500 w-12">Shadow</span>
                 <button
@@ -1327,8 +1852,6 @@ const TextPanel: React.FC<TextPanelProps> = ({
           )}
         </div>
       )}
-
-      {/* Actions */}
       <div className="flex items-center justify-between pt-1 border-t border-gray-800">
         <div className="flex items-center gap-2">
           {sel && (
@@ -1574,6 +2097,7 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
     startY: number;
     startCrop: CropBox;
   } | null>(null);
+
   const initCropBox = useCallback(() => {
     if (!imgRef.current || !containerRef.current) return;
     const ir = imgRef.current.getBoundingClientRect(),
@@ -1590,6 +2114,7 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
     });
     setImgLoaded(true);
   }, []);
+
   useEffect(() => {
     if (!imgLoaded) return;
     const ratio = getAspectRatioValue(aspectRatio);
@@ -1602,6 +2127,7 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
       return { ...prev, height: ch, width: ch * ratio };
     });
   }, [aspectRatio]);
+
   const clamp = (box: CropBox, d: typeof imgDimensions): CropBox => {
     const x = Math.max(d.offsetX, Math.min(box.x, d.offsetX + d.w - box.width)),
       y = Math.max(d.offsetY, Math.min(box.y, d.offsetY + d.h - box.height));
@@ -1882,8 +2408,104 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
   );
 };
 
+// ─── COMPARE SLIDER ───────────────────────────────────────────────────────────
+const CompareSlider: React.FC<{ original: string; enhanced: string }> = ({
+  original,
+  enhanced,
+}) => {
+  const [pos, setPos] = useState(50);
+  const [cw, setCw] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) setCw(e.contentRect.width);
+    });
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
+  const handleMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!containerRef.current) return;
+    const { left, width } = containerRef.current.getBoundingClientRect();
+    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+    setPos(Math.min(100, Math.max(0, ((clientX - left) / width) * 100)));
+  };
+  return (
+    <div
+      ref={containerRef}
+      className="relative inline-block w-auto h-auto select-none cursor-col-resize rounded-xl overflow-hidden border border-gray-700 shadow-2xl bg-gray-900"
+      onMouseMove={handleMove}
+      onTouchMove={handleMove}
+    >
+      <img
+        src={original}
+        alt=""
+        className="block max-h-[60vh] w-auto opacity-0 pointer-events-none"
+      />
+      <div className="absolute inset-0">
+        <img
+          src={enhanced}
+          alt="Upscaled"
+          className="absolute inset-0 w-full h-full object-contain"
+        />
+      </div>
+      <div
+        className="absolute inset-0 overflow-hidden border-r-2 border-white/60 z-10"
+        style={{ width: `${pos}%` }}
+      >
+        <div
+          className="absolute top-0 left-0 h-full"
+          style={{ width: cw ? `${cw}px` : "100%" }}
+        >
+          <img
+            src={original}
+            alt="Original"
+            className="absolute inset-0 w-full h-full object-contain"
+          />
+        </div>
+      </div>
+      <div
+        className="absolute top-0 bottom-0 w-1 bg-white/80 shadow-lg flex items-center justify-center z-20"
+        style={{ left: `${pos}%` }}
+      >
+        <div className="bg-white rounded-full p-1.5 shadow border border-gray-300">
+          <svg
+            className="w-4 h-4 text-black"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M8 9l-3 3 3 3M16 9l3 3-3 3"
+            />
+          </svg>
+        </div>
+      </div>
+      <div className="absolute top-3 left-3 bg-black/60 backdrop-blur text-white text-[10px] font-bold px-2 py-1 rounded z-30 pointer-events-none uppercase tracking-wider border border-white/10">
+        Original
+      </div>
+      <div className="absolute top-3 right-3 bg-black/60 backdrop-blur text-white text-[10px] font-bold px-2 py-1 rounded z-30 pointer-events-none uppercase tracking-wider border border-white/10">
+        Upscaled
+      </div>
+    </div>
+  );
+};
+
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
-type ActiveMode = "none" | "crop" | "adjust" | "inpaint" | "text";
+type ActiveMode =
+  | "none"
+  | "crop"
+  | "adjust"
+  | "inpaint"
+  | "text"
+  | "bgremove"
+  | "eraser"
+  | "upscale"
+  | "skin"
+  | "overlay";
 
 const ImageEditingPage = () => {
   const { data: session } = useSession();
@@ -1899,7 +2521,6 @@ const ImageEditingPage = () => {
     null,
   );
   const [mainImageFile, setMainImageFile] = useState<File | null>(null);
-
   const [referenceImageFile, setReferenceImageFile] = useState<File | null>(
     null,
   );
@@ -1915,8 +2536,155 @@ const ImageEditingPage = () => {
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
   const textContainerRef = useRef<HTMLDivElement | null>(null);
 
+  // ── OVERLAY state ────────────────────────────────────────────────────────
+  const [overlays, setOverlays] = useState<OverlayImage[]>([]);
+  const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(
+    null,
+  );
+  const overlayContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const addOverlay = (src: string) => {
+    const ov = makeOverlay(src);
+    setOverlays((prev) => [...prev, ov]);
+    setSelectedOverlayId(ov.id);
+  };
+  const updateOverlay = (id: string, p: Partial<OverlayImage>) =>
+    setOverlays((prev) => prev.map((o) => (o.id === id ? { ...o, ...p } : o)));
+  const deleteOverlay = (id: string) => {
+    setOverlays((prev) => prev.filter((o) => o.id !== id));
+    setSelectedOverlayId(null);
+  };
+
+  const handleOverlayApply = () => {
+    if (!overlayContainerRef.current || !imageRef.current) return;
+    const base = imageRef.current;
+    const container = overlayContainerRef.current;
+    const canvas = document.createElement("canvas");
+    canvas.width = base.naturalWidth;
+    canvas.height = base.naturalHeight;
+    const ctx = canvas.getContext("2d")!;
+    ctx.drawImage(base, 0, 0);
+
+    // We need to load each overlay image synchronously-ish
+    let pending = overlays.filter((o) => o !== null).length;
+    if (pending === 0) {
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+      setCurrentImagePreview(dataUrl);
+      fetch(dataUrl)
+        .then((r) => r.blob())
+        .then((blob) =>
+          setMainImageFile(
+            new File([blob], "overlay.jpg", { type: "image/jpeg" }),
+          ),
+        );
+      setOverlays([]);
+      setSelectedOverlayId(null);
+      setActiveMode("none");
+      toast.success("Overlay applied!");
+      return;
+    }
+
+    overlays.forEach((ov) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const lx = (ov.x / 100) * canvas.width;
+        const ly = (ov.y / 100) * canvas.height;
+        const lw = (ov.width / 100) * canvas.width;
+        const lh = (ov.height / 100) * canvas.height;
+        ctx.save();
+        ctx.globalAlpha = ov.opacity / 100;
+        ctx.translate(lx + lw / 2, ly + lh / 2);
+        ctx.rotate((ov.rotation * Math.PI) / 180);
+        ctx.drawImage(img, -lw / 2, -lh / 2, lw, lh);
+        ctx.restore();
+        pending--;
+        if (pending === 0) {
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+          setCurrentImagePreview(dataUrl);
+          fetch(dataUrl)
+            .then((r) => r.blob())
+            .then((blob) =>
+              setMainImageFile(
+                new File([blob], "overlay.jpg", { type: "image/jpeg" }),
+              ),
+            );
+          setOverlays([]);
+          setSelectedOverlayId(null);
+          setActiveMode("none");
+          toast.success("Overlay applied!");
+        }
+      };
+      img.src = ov.src;
+    });
+  };
+
   const [activeJobs, setActiveJobs] = useState<GenerationJob[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+
+  // BG REMOVER
+  const [bgModel, setBgModel] = useState<"briaai/RMBG-1.4" | "Xenova/modnet">(
+    "briaai/RMBG-1.4",
+  );
+  const [bgTool, setBgTool] = useState<"none" | "erase" | "restore">("none");
+  const [bgBrushSize, setBgBrushSize] = useState(30);
+  const [bgIsDrawing, setBgIsDrawing] = useState(false);
+  const [bgHistory, setBgHistory] = useState<ImageData[]>([]);
+  const [bgZoom, setBgZoom] = useState(1);
+  const [bgDimensions, setBgDimensions] = useState<{
+    w: number;
+    h: number;
+  } | null>(null);
+  const [bgProcessing, setBgProcessing] = useState(false);
+  const [bgProgressText, setBgProgressText] = useState("Processing...");
+  const [bgCompleted, setBgCompleted] = useState(false);
+  const bgCanvasRef = useRef<HTMLCanvasElement>(null);
+  const bgContainerRef = useRef<HTMLDivElement>(null);
+  const bgOrigImgRef = useRef<HTMLImageElement | null>(null);
+  const bgLastPosRef = useRef<{ x: number; y: number } | null>(null);
+  const bgWorkerRef = useRef<Worker | null>(null);
+  const bgProgressRef = useRef("Initializing...");
+
+  // MAGIC ERASER
+  const [meReady, setMeReady] = useState(false);
+  const [meBrushSize, setMeBrushSize] = useState(30);
+  const [meIsDragging, setMeIsDragging] = useState(false);
+  const [meIsProcessing, setMeIsProcessing] = useState(false);
+  const [meHistory, setMeHistory] = useState<ImageData[]>([]);
+  const [meZoom, setMeZoom] = useState(1);
+  const [meDimensions, setMeDimensions] = useState<{
+    w: number;
+    h: number;
+  } | null>(null);
+  const [mePreviewUrl, setMePreviewUrl] = useState<string | null>(null);
+  const meCanvasRef = useRef<HTMLCanvasElement>(null);
+  const meContainerRef = useRef<HTMLDivElement>(null);
+  const meOrigImgRef = useRef<HTMLImageElement | null>(null);
+  const meLastPosRef = useRef<{ x: number; y: number } | null>(null);
+  const meWorkerRef = useRef<Worker | null>(null);
+
+  // UPSCALER
+  const [upscaleLevel, setUpscaleLevel] = useState<"2k" | "4k">("2k");
+  const [upscaleLoading, setUpscaleLoading] = useState(false);
+  const [upscaleResult, setUpscaleResult] = useState<string | null>(null);
+  const upscaleCost = upscaleLevel === "4k" ? 20 : 10;
+
+  // AI TOOLS DROPDOWN
+  const [aiToolsOpen, setAiToolsOpen] = useState(false);
+  const aiToolsRef = useRef<HTMLDivElement>(null);
+
+  // SKIN ENHANCER
+  const [skinStrength, setSkinStrength] = useState(0.35);
+  const [skinFeatures, setSkinFeatures] = useState({
+    freckles: false,
+    acne: false,
+    peachFuzz: true,
+    lensFlare: false,
+  });
+  const [skinLoading, setSkinLoading] = useState(false);
+  const [skinResult, setSkinResult] = useState<string | null>(null);
+  const toggleSkinFeature = (key: keyof typeof skinFeatures) =>
+    setSkinFeatures((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const mainInputRef = useRef<HTMLInputElement>(null);
   const referenceInputRef = useRef<HTMLInputElement>(null);
@@ -1928,6 +2696,21 @@ const ImageEditingPage = () => {
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // Close AI tools dropdown on outside click
+  useEffect(() => {
+    if (!aiToolsOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        aiToolsRef.current &&
+        !aiToolsRef.current.contains(e.target as Node)
+      ) {
+        setAiToolsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [aiToolsOpen]);
 
   const isInpaintMode = activeMode === "inpaint";
 
@@ -2041,6 +2824,9 @@ const ImageEditingPage = () => {
     setActiveMode((prev) => (prev === mode ? "none" : mode));
     if (mode !== "inpaint") setHasDrawnMask(false);
     if (mode !== "text") setSelectedTextId(null);
+    if (mode !== "overlay") setSelectedOverlayId(null);
+    if (!["bgremove", "eraser", "upscale", "skin"].includes(mode))
+      setAiToolsOpen(false);
   };
 
   const addTextLayer = (partial?: Partial<TextLayer>) => {
@@ -2048,11 +2834,10 @@ const ImageEditingPage = () => {
     setTextLayers((prev) => [...prev, layer]);
     setSelectedTextId(layer.id);
   };
-  const updateTextLayer = (id: string, patch: Partial<TextLayer>) => {
+  const updateTextLayer = (id: string, patch: Partial<TextLayer>) =>
     setTextLayers((prev) =>
       prev.map((l) => (l.id === id ? { ...l, ...patch } : l)),
     );
-  };
   const deleteTextLayer = (id: string) => {
     setTextLayers((prev) => prev.filter((l) => l.id !== id));
     setSelectedTextId(null);
@@ -2063,21 +2848,6 @@ const ImageEditingPage = () => {
     const nl = makeLayer({ ...layer, x: layer.x + 3, y: layer.y + 3 });
     setTextLayers((prev) => [...prev, nl]);
     setSelectedTextId(nl.id);
-  };
-
-  const handleTextApply = (dataUrl: string) => {
-    setCurrentImagePreview(dataUrl);
-    fetch(dataUrl)
-      .then((r) => r.blob())
-      .then((blob) =>
-        setMainImageFile(
-          new File([blob], "text-overlay.jpg", { type: "image/jpeg" }),
-        ),
-      );
-    setTextLayers([]);
-    setSelectedTextId(null);
-    setActiveMode("none");
-    toast.success("Text applied!");
   };
 
   const handleMainImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2097,8 +2867,8 @@ const ImageEditingPage = () => {
     setHasDrawnMask(false);
     setActiveJobs([]);
     setTextLayers([]);
+    setOverlays([]);
   };
-
   const handleReferenceImageChange = (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
@@ -2123,6 +2893,7 @@ const ImageEditingPage = () => {
       setHasDrawnMask(false);
       setActiveJobs([]);
       setTextLayers([]);
+      setOverlays([]);
       toast.info("Reverted to original image");
       return;
     }
@@ -2134,6 +2905,7 @@ const ImageEditingPage = () => {
     setActiveJobs([]);
     removeReferenceImage();
     setTextLayers([]);
+    setOverlays([]);
     if (mainInputRef.current) mainInputRef.current.value = "";
   };
 
@@ -2245,354 +3017,1621 @@ const ImageEditingPage = () => {
     }
   };
 
+  // BG REMOVER worker
+  useEffect(() => {
+    if (activeMode !== "bgremove") return;
+    if (bgWorkerRef.current) return;
+    bgWorkerRef.current = new Worker(
+      new URL("../bg-remover/bg-remover.worker.ts", import.meta.url),
+      { type: "module" },
+    );
+    bgWorkerRef.current.onmessage = (event) => {
+      const { status, blob, error, percent, key } = event.data;
+      if (status === "progress") {
+        bgProgressRef.current = `${key || "Processing..."} ${percent ?? ""}%`;
+        setBgProgressText(bgProgressRef.current);
+      } else if (status === "success") {
+        const url = URL.createObjectURL(blob);
+        setBgProcessing(false);
+        setBgCompleted(true);
+        const img = new Image();
+        img.src = url;
+        img.onload = () => {
+          const canvas = bgCanvasRef.current;
+          if (!canvas) return;
+          canvas.width = img.width;
+          canvas.height = img.height;
+          setBgDimensions({ w: img.width, h: img.height });
+          if (bgContainerRef.current) {
+            const cw = bgContainerRef.current.clientWidth - 40,
+              ch = bgContainerRef.current.clientHeight - 40;
+            setBgZoom(Math.min(cw / img.width, ch / img.height, 1));
+          }
+          const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0);
+          setBgHistory([ctx.getImageData(0, 0, canvas.width, canvas.height)]);
+          const orig = new Image();
+          orig.src = url;
+          bgOrigImgRef.current = orig;
+        };
+        toast.success("Background removed!");
+      } else if (status === "error") {
+        console.error(error);
+        setBgProcessing(false);
+        toast.error("BG removal failed.");
+      }
+    };
+    return () => {
+      bgWorkerRef.current?.terminate();
+      bgWorkerRef.current = null;
+    };
+  }, [activeMode]);
+
+  const handleBgRemove = () => {
+    if (!mainImageFile) return toast.error("No image loaded.");
+    if (!bgWorkerRef.current)
+      return toast.error("Worker not ready, try again.");
+    setBgProcessing(true);
+    setBgCompleted(false);
+    setBgProgressText("Starting...");
+    bgProgressRef.current = "Starting...";
+    bgWorkerRef.current.postMessage({
+      imageBlob: mainImageFile,
+      modelName: bgModel,
+    });
+  };
+  const getBgPointerPos = (e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = bgCanvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const sx = canvas.width / rect.width,
+      sy = canvas.height / rect.height;
+    const clientX =
+      "touches" in e
+        ? (e as React.TouchEvent).touches[0].clientX
+        : (e as React.MouseEvent).clientX;
+    const clientY =
+      "touches" in e
+        ? (e as React.TouchEvent).touches[0].clientY
+        : (e as React.MouseEvent).clientY;
+    return { x: (clientX - rect.left) * sx, y: (clientY - rect.top) * sy };
+  };
+  const bgSaveHistory = () => {
+    const canvas = bgCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return;
+    setBgHistory((prev) => {
+      const next = [
+        ...prev,
+        ctx.getImageData(0, 0, canvas.width, canvas.height),
+      ];
+      if (next.length > 10) next.shift();
+      return next;
+    });
+  };
+  const handleBgUndo = () => {
+    if (bgHistory.length <= 1) return;
+    const canvas = bgCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return;
+    const next = [...bgHistory];
+    next.pop();
+    ctx.putImageData(next[next.length - 1], 0, 0);
+    setBgHistory(next);
+  };
+  const bgStartDrawing = (e: React.MouseEvent | React.TouchEvent) => {
+    if (bgTool === "none") return;
+    setBgIsDrawing(true);
+    bgLastPosRef.current = getBgPointerPos(e);
+  };
+  const bgDraw = (e: React.MouseEvent | React.TouchEvent) => {
+    if (
+      !bgIsDrawing ||
+      bgTool === "none" ||
+      !bgCanvasRef.current ||
+      !bgLastPosRef.current
+    )
+      return;
+    const ctx = bgCanvasRef.current.getContext("2d")!;
+    const pos = getBgPointerPos(e);
+    ctx.lineWidth = bgBrushSize;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    if (bgTool === "erase") {
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.strokeStyle = "rgba(0,0,0,1)";
+    } else if (bgTool === "restore" && bgOrigImgRef.current) {
+      ctx.globalCompositeOperation = "source-over";
+      const pat = ctx.createPattern(bgOrigImgRef.current, "no-repeat");
+      if (pat) ctx.strokeStyle = pat;
+    }
+    ctx.beginPath();
+    ctx.moveTo(bgLastPosRef.current.x, bgLastPosRef.current.y);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    bgLastPosRef.current = pos;
+  };
+  const bgStopDrawing = () => {
+    if (bgIsDrawing) {
+      setBgIsDrawing(false);
+      bgLastPosRef.current = null;
+      bgSaveHistory();
+    }
+  };
+  const handleBgDownload = () => {
+    if (!bgCanvasRef.current) return;
+    const link = document.createElement("a");
+    link.href = bgCanvasRef.current.toDataURL("image/png");
+    link.download = `bg-removed-${Date.now()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+  const handleBgApply = () => {
+    if (!bgCanvasRef.current) return;
+    const dataUrl = bgCanvasRef.current.toDataURL("image/png");
+    setCurrentImagePreview(dataUrl);
+    fetch(dataUrl)
+      .then((r) => r.blob())
+      .then((blob) =>
+        setMainImageFile(
+          new File([blob], "bg-removed.png", { type: "image/png" }),
+        ),
+      );
+    setBgCompleted(false);
+    setBgHistory([]);
+    setBgTool("none");
+    setActiveMode("none");
+    toast.success("Applied to editor!");
+  };
+
+  // MAGIC ERASER worker
+  useEffect(() => {
+    if (activeMode !== "eraser") return;
+    if (meWorkerRef.current) return;
+    meWorkerRef.current = new Worker(
+      new URL("../eraser/magic-eraser.worker.ts", import.meta.url),
+      { type: "module" },
+    );
+    meWorkerRef.current.onmessage = (e) => {
+      const { status, result, error } = e.data;
+      if (status === "ready") {
+        setMeReady(true);
+      }
+      if (status === "done") {
+        const c = document.createElement("canvas");
+        c.width = result.width;
+        c.height = result.height;
+        c.getContext("2d")!.putImageData(result, 0, 0);
+        c.toBlob((b) => {
+          if (!b) return;
+          if (mePreviewUrl?.startsWith("blob:"))
+            URL.revokeObjectURL(mePreviewUrl);
+          const url = URL.createObjectURL(b);
+          setMePreviewUrl(url);
+          const img = new Image();
+          img.src = url;
+          img.onload = () => {
+            meOrigImgRef.current = img;
+          };
+          const ctx = meCanvasRef.current?.getContext("2d");
+          if (ctx && meCanvasRef.current)
+            ctx.clearRect(
+              0,
+              0,
+              meCanvasRef.current.width,
+              meCanvasRef.current.height,
+            );
+          setMeHistory([]);
+          setMeIsProcessing(false);
+          toast.success("Object removed!");
+        }, "image/png");
+      }
+      if (status === "error") {
+        toast.error("Magic eraser failed: " + error);
+        setMeIsProcessing(false);
+      }
+    };
+    meWorkerRef.current.postMessage({ action: "preload" });
+    return () => {
+      meWorkerRef.current?.terminate();
+      meWorkerRef.current = null;
+      setMeReady(false);
+    };
+  }, [activeMode]);
+
+  useEffect(() => {
+    if (activeMode === "eraser" && currentImagePreview) {
+      if (mePreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(mePreviewUrl);
+      setMePreviewUrl(currentImagePreview);
+      setMeHistory([]);
+      const img = new Image();
+      img.src = currentImagePreview;
+      img.onload = () => {
+        setMeDimensions({ w: img.width, h: img.height });
+        meOrigImgRef.current = img;
+        if (meContainerRef.current) {
+          const pad = 40;
+          const scale = Math.min(
+            (meContainerRef.current.clientWidth - pad) / img.width,
+            (meContainerRef.current.clientHeight - pad) / img.height,
+            1,
+          );
+          setMeZoom(scale);
+        }
+      };
+    }
+  }, [activeMode]);
+
+  const getMePointerPos = (e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = meCanvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const sx = canvas.width / rect.width,
+      sy = canvas.height / rect.height;
+    const clientX =
+      "touches" in e
+        ? (e as React.TouchEvent).touches[0].clientX
+        : (e as React.MouseEvent).clientX;
+    const clientY =
+      "touches" in e
+        ? (e as React.TouchEvent).touches[0].clientY
+        : (e as React.MouseEvent).clientY;
+    return { x: (clientX - rect.left) * sx, y: (clientY - rect.top) * sy };
+  };
+  const meStartDrawing = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!meCanvasRef.current || meIsProcessing) return;
+    setMeIsDragging(true);
+    const pos = getMePointerPos(e);
+    meLastPosRef.current = pos;
+    const ctx = meCanvasRef.current.getContext("2d");
+    if (ctx) {
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(255,0,0,0.5)";
+      ctx.arc(pos.x, pos.y, meBrushSize / 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  };
+  const meDraw = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!meIsDragging || !meCanvasRef.current || !meLastPosRef.current) return;
+    const ctx = meCanvasRef.current.getContext("2d");
+    if (!ctx) return;
+    const pos = getMePointerPos(e);
+    ctx.lineWidth = meBrushSize;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "rgba(255,0,0,0.5)";
+    ctx.beginPath();
+    ctx.moveTo(meLastPosRef.current.x, meLastPosRef.current.y);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    meLastPosRef.current = pos;
+  };
+  const meStopDrawing = () => {
+    if (!meIsDragging) return;
+    setMeIsDragging(false);
+    meLastPosRef.current = null;
+    const ctx = meCanvasRef.current?.getContext("2d");
+    if (ctx && meCanvasRef.current) {
+      const snap = ctx.getImageData(
+        0,
+        0,
+        meCanvasRef.current.width,
+        meCanvasRef.current.height,
+      );
+      setMeHistory((prev) => [...prev, snap].slice(-10));
+    }
+  };
+  const handleMeUndo = () => {
+    const ctx = meCanvasRef.current?.getContext("2d");
+    if (!ctx || meHistory.length === 0) return;
+    const next = [...meHistory];
+    next.pop();
+    setMeHistory(next);
+    if (next.length > 0) ctx.putImageData(next[next.length - 1], 0, 0);
+    else ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  };
+  const handleMeErase = async () => {
+    if (!meOrigImgRef.current || !meCanvasRef.current || !mePreviewUrl) return;
+    setMeIsProcessing(true);
+    try {
+      const imageRes = await fetch(mePreviewUrl);
+      const imageBlob = await imageRes.blob();
+      const imageBitmap = await createImageBitmap(imageBlob);
+      const maskBitmap = await createImageBitmap(meCanvasRef.current);
+      meWorkerRef.current?.postMessage(
+        { action: "process", imageBitmap, maskBitmap },
+        [imageBitmap, maskBitmap],
+      );
+    } catch (err: any) {
+      toast.error("Failed: " + (err.message || "Unknown error"));
+      setMeIsProcessing(false);
+    }
+  };
+  const handleMeDownload = () => {
+    if (!mePreviewUrl) return;
+    const link = document.createElement("a");
+    link.href = mePreviewUrl;
+    link.download = `magic-erased-${Date.now()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+  const handleMeApply = () => {
+    if (!mePreviewUrl) return;
+    setCurrentImagePreview(mePreviewUrl);
+    fetch(mePreviewUrl)
+      .then((r) => r.blob())
+      .then((blob) =>
+        setMainImageFile(new File([blob], "erased.png", { type: "image/png" })),
+      );
+    setMeHistory([]);
+    setMePreviewUrl(null);
+    setMeDimensions(null);
+    setActiveMode("none");
+    toast.success("Applied to editor!");
+  };
+
+  // UPSCALER
+  const handleUpscale = async () => {
+    if (!isAuthenticated) return setIsAuthModalOpen(true);
+    if (!mainImageFile) return toast.error("No image loaded.");
+    setUpscaleLoading(true);
+    setUpscaleResult(null);
+    toast.info(`Upscaling… (Cost: ${upscaleCost} coins)`);
+    try {
+      const imageUrl = await fal.storage.upload(mainImageFile);
+      const scale = upscaleLevel === "4k" ? 4 : 2;
+      const res = await fetch("/api/fal/upscale", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          modelId: "fal-ai/nano-banana-2/edit",
+          input: { image_url: imageUrl, scale },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(
+          res.status === 402
+            ? "Insufficient coins!"
+            : data.error || "Upscale failed",
+        );
+        throw new Error(data.error);
+      }
+      setUpscaleResult(data.imageUrl);
+      toast.success("Upscale complete!");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setUpscaleLoading(false);
+    }
+  };
+  const handleUpscaleDownload = async () => {
+    if (!upscaleResult) return;
+    try {
+      const blob = await (await fetch(upscaleResult)).blob();
+      const link = document.createElement("a");
+      link.href = window.URL.createObjectURL(blob);
+      link.download = `upscaled-${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch {
+      toast.error("Download failed");
+    }
+  };
+  const handleUpscaleApply = async () => {
+    if (!upscaleResult) return;
+    setCurrentImagePreview(upscaleResult);
+    fetch(upscaleResult)
+      .then((r) => r.blob())
+      .then((blob) =>
+        setMainImageFile(
+          new File([blob], "upscaled.png", { type: "image/png" }),
+        ),
+      );
+    setUpscaleResult(null);
+    setActiveMode("none");
+    toast.success("Upscaled image applied!");
+  };
+
+  // SKIN ENHANCER
+  const handleSkinEnhance = async () => {
+    if (!isAuthenticated) return setIsAuthModalOpen(true);
+    if (!mainImageFile) return toast.error("No image loaded.");
+    setSkinLoading(true);
+    setSkinResult(null);
+    toast.info("Enhancing skin… (Cost: 20 coins)");
+    try {
+      const imageUrl = await fal.storage.upload(mainImageFile);
+      const res = await fetch("/api/fal/skin-enhancer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input: {
+            image_url: imageUrl,
+            strength: skinStrength,
+            features: skinFeatures,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(
+          res.status === 402
+            ? "Insufficient coins!"
+            : data.error || "Enhancement failed",
+        );
+        throw new Error(data.error);
+      }
+      setSkinResult(data.imageUrl);
+      toast.success("Enhancement complete!");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSkinLoading(false);
+    }
+  };
+  const handleSkinDownload = async () => {
+    if (!skinResult) return;
+    try {
+      const blob = await (await fetch(skinResult)).blob();
+      const link = document.createElement("a");
+      link.href = window.URL.createObjectURL(blob);
+      link.download = `skin-enhanced-${Date.now()}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch {
+      toast.error("Download failed");
+    }
+  };
+  const handleSkinApply = () => {
+    if (!skinResult) return;
+    setCurrentImagePreview(skinResult);
+    fetch(skinResult)
+      .then((r) => r.blob())
+      .then((blob) =>
+        setMainImageFile(
+          new File([blob], "skin-enhanced.jpg", { type: "image/jpeg" }),
+        ),
+      );
+    setSkinResult(null);
+    setActiveMode("none");
+    toast.success("Applied to editor!");
+  };
+
   if (!isMounted) return null;
 
-  const isFullScreenMode =
-    (activeMode as string) === "crop" || (activeMode as string) === "adjust";
-  const isTextMode = (activeMode as string) === "text";
+  const isFullScreenMode = activeMode === "crop" || activeMode === "adjust";
+  const isTextMode = activeMode === "text";
+  const isBgRemoveMode = activeMode === "bgremove";
+  const isEraserMode = activeMode === "eraser";
+  const isUpscaleMode = activeMode === "upscale";
+  const isSkinMode = activeMode === "skin";
+  const isOverlayMode = activeMode === "overlay";
 
   return (
-    <div className="flex flex-col h-full text-gray-300">
-      {/* PREVIEW */}
-      <div className="grow overflow-y-auto p-4 md:p-6 flex flex-col justify-center min-h-[60vh]">
-        <div className="w-full max-w-7xl mx-auto flex flex-col items-center">
-          {!currentImagePreview && (
-            <div className="flex flex-col items-center justify-center text-center text-gray-600">
-              <ImagePlus className="h-20 w-20 mb-6 opacity-30" />
-              <h1 className="text-2xl font-semibold mb-2 text-gray-500">
-                Image Editor
-              </h1>
-              <p className="text-gray-500 max-w-md">
-                Upload an image, brush over an area, and type.
-              </p>
-            </div>
-          )}
+    <div className="no-sidebar-swipe flex flex-col h-full text-gray-300">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        <div className="grow overflow-y-auto p-4 md:p-6 flex flex-col justify-center min-h-[60vh]">
+          <div className="w-full max-w-7xl mx-auto flex flex-col items-center">
+            {!currentImagePreview && (
+              <div className="flex flex-col items-center justify-center text-center text-gray-600">
+                <ImagePlus className="h-20 w-20 mb-6 opacity-30" />
+                <h1 className="text-2xl font-semibold mb-2 text-gray-500">
+                  Image Editor
+                </h1>
+                <p className="text-gray-500 max-w-md">
+                  Upload an image, brush over an area, and type.
+                </p>
+              </div>
+            )}
 
-          {currentImagePreview && (activeMode as string) === "crop" && (
-            <div className="w-full max-w-3xl">
-              <ImageCropper
-                imageSrc={currentImagePreview}
-                onCropComplete={handleCropComplete}
-                onCancel={() => setActiveMode("none")}
-              />
-            </div>
-          )}
-          {currentImagePreview && (activeMode as string) === "adjust" && (
-            <div className="w-full max-w-3xl">
-              <AdjustFilterPanel
-                imageSrc={currentImagePreview}
-                onApply={handleAdjustApply}
-                onCancel={() => setActiveMode("none")}
-              />
-            </div>
-          )}
-
-          {/* TEXT MODE */}
-          {currentImagePreview && isTextMode && activeJobs.length === 0 && (
-            <div className="w-full max-w-6xl flex flex-col gap-4">
-              <div
-                ref={textContainerRef}
-                className="relative rounded-xl overflow-hidden border border-gray-800 bg-black/40 shadow-2xl w-fit mx-auto"
-                onMouseDown={() => setSelectedTextId(null)}
-              >
-                <img
-                  ref={imageRef}
-                  src={currentImagePreview}
-                  alt="Work"
-                  crossOrigin="anonymous"
-                  className="max-h-[45vh] max-w-full w-auto object-contain block"
-                  draggable={false}
+            {currentImagePreview && activeMode === "crop" && (
+              <div className="w-full max-w-3xl">
+                <ImageCropper
+                  imageSrc={currentImagePreview}
+                  onCropComplete={handleCropComplete}
+                  onCancel={() => setActiveMode("none")}
                 />
-                {textLayers.map((layer) => (
-                  <TextNode
-                    key={layer.id}
-                    layer={layer}
-                    selected={selectedTextId === layer.id}
-                    containerRef={textContainerRef}
-                    onSelect={() => setSelectedTextId(layer.id)}
-                    onUpdate={(patch) => updateTextLayer(layer.id, patch)}
-                    onDelete={() => deleteTextLayer(layer.id)}
-                    onDuplicate={() => duplicateTextLayer(layer.id)}
+              </div>
+            )}
+            {currentImagePreview && activeMode === "adjust" && (
+              <div className="w-full max-w-3xl">
+                <AdjustFilterPanel
+                  imageSrc={currentImagePreview}
+                  onApply={handleAdjustApply}
+                  onCancel={() => setActiveMode("none")}
+                />
+              </div>
+            )}
+
+            {/* TEXT MODE */}
+            {currentImagePreview && isTextMode && activeJobs.length === 0 && (
+              <div className="w-full max-w-6xl flex flex-col gap-4">
+                <div
+                  ref={textContainerRef}
+                  className="relative rounded-xl overflow-hidden border border-gray-800 bg-black/40 shadow-2xl w-fit mx-auto"
+                  onMouseDown={() => setSelectedTextId(null)}
+                >
+                  <img
+                    ref={imageRef}
+                    src={currentImagePreview}
+                    alt="Work"
+                    crossOrigin="anonymous"
+                    className="max-h-[45vh] max-w-full w-auto object-contain block"
+                    draggable={false}
                   />
-                ))}
-                {textLayers.length === 0 && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="bg-black/50 backdrop-blur-sm text-gray-400 text-xs px-4 py-2 rounded-lg border border-gray-700">
-                      Pick a preset below or click "Add Text" to start
+                  {textLayers.map((layer) => (
+                    <TextNode
+                      key={layer.id}
+                      layer={layer}
+                      selected={selectedTextId === layer.id}
+                      containerRef={textContainerRef}
+                      onSelect={() => setSelectedTextId(layer.id)}
+                      onUpdate={(patch) => updateTextLayer(layer.id, patch)}
+                      onDelete={() => deleteTextLayer(layer.id)}
+                      onDuplicate={() => duplicateTextLayer(layer.id)}
+                    />
+                  ))}
+                  {textLayers.length === 0 && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="bg-black/50 backdrop-blur-sm text-gray-400 text-xs px-4 py-2 rounded-lg border border-gray-700">
+                        Pick a preset below or click "Add Text" to start
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <TextPanel
+                  layers={textLayers}
+                  selectedId={selectedTextId}
+                  onSelect={setSelectedTextId}
+                  onAdd={addTextLayer}
+                  onUpdate={updateTextLayer}
+                  onDelete={deleteTextLayer}
+                  onDuplicate={duplicateTextLayer}
+                  onApply={(dataUrl) => {
+                    setCurrentImagePreview(dataUrl);
+                    fetch(dataUrl)
+                      .then((r) => r.blob())
+                      .then((blob) =>
+                        setMainImageFile(
+                          new File([blob], "text-overlay.jpg", {
+                            type: "image/jpeg",
+                          }),
+                        ),
+                      );
+                    setTextLayers([]);
+                    setSelectedTextId(null);
+                    setActiveMode("none");
+                    toast.success("Text baked into image!");
+                  }}
+                  onCancel={() => setActiveMode("none")}
+                  imageRef={imageRef}
+                  containerRef={textContainerRef}
+                />
+              </div>
+            )}
+
+            {/* OVERLAY MODE */}
+            {currentImagePreview &&
+              isOverlayMode &&
+              activeJobs.length === 0 && (
+                <div className="w-full max-w-6xl flex flex-col gap-4">
+                  <div
+                    ref={overlayContainerRef}
+                    className="relative rounded-xl overflow-hidden border border-gray-800 bg-black/40 shadow-2xl w-fit mx-auto"
+                    onMouseDown={() => setSelectedOverlayId(null)}
+                  >
+                    <img
+                      ref={imageRef}
+                      src={currentImagePreview}
+                      alt="Work"
+                      crossOrigin="anonymous"
+                      className="max-h-[45vh] max-w-full w-auto object-contain block"
+                      draggable={false}
+                    />
+                    {overlays.map((ov) => (
+                      <OverlayNode
+                        key={ov.id}
+                        overlay={ov}
+                        selected={selectedOverlayId === ov.id}
+                        containerRef={overlayContainerRef}
+                        onSelect={() => setSelectedOverlayId(ov.id)}
+                        onUpdate={(patch) => updateOverlay(ov.id, patch)}
+                        onDelete={() => deleteOverlay(ov.id)}
+                      />
+                    ))}
+                    {overlays.length === 0 && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="bg-black/50 backdrop-blur-sm text-gray-400 text-xs px-4 py-2 rounded-lg border border-gray-700">
+                          Click "Add Image" below to place an overlay
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <OverlayPanel
+                    overlays={overlays}
+                    selectedId={selectedOverlayId}
+                    onSelect={setSelectedOverlayId}
+                    onUpdate={updateOverlay}
+                    onDelete={deleteOverlay}
+                    onAdd={addOverlay}
+                    onApply={handleOverlayApply}
+                    onCancel={() => {
+                      setOverlays([]);
+                      setSelectedOverlayId(null);
+                      setActiveMode("none");
+                    }}
+                  />
+                </div>
+              )}
+
+            {/* BG REMOVE MODE */}
+            {currentImagePreview && isBgRemoveMode && (
+              <div className="w-full max-w-4xl flex flex-col gap-4 animate-in fade-in duration-200">
+                {!bgCompleted && !bgProcessing && (
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="flex items-center gap-1 bg-gray-900/60 p-1 rounded-full border border-white/10">
+                      <button
+                        onClick={() => setBgModel("briaai/RMBG-1.4")}
+                        className={`h-8 text-xs px-5 rounded-full font-semibold transition-all flex items-center gap-1.5 ${bgModel === "briaai/RMBG-1.4" ? "bg-gradient-to-r from-cyan-500 to-teal-500 text-white shadow-md" : "text-gray-400 hover:text-white"}`}
+                      >
+                        <Sparkles className="w-3.5 h-3.5" /> HD (150 MB)
+                      </button>
+                      <button
+                        onClick={() => setBgModel("Xenova/modnet")}
+                        className={`h-8 text-xs px-5 rounded-full font-semibold transition-all flex items-center gap-1.5 ${bgModel === "Xenova/modnet" ? "bg-gradient-to-r from-cyan-500 to-teal-500 text-white shadow-md" : "text-gray-400 hover:text-white"}`}
+                      >
+                        <Zap className="w-3.5 h-3.5" /> Fast (25 MB)
+                      </button>
+                    </div>
+                    <img
+                      src={currentImagePreview}
+                      alt="Preview"
+                      className="max-h-[50vh] max-w-full w-auto object-contain rounded-xl border border-gray-800 shadow-2xl"
+                    />
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={handleBgRemove}
+                        className="h-9 px-6 rounded-full font-medium text-xs gap-2 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white shadow-lg"
+                      >
+                        <Scissors className="w-3.5 h-3.5" /> Remove Background
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setActiveMode("none")}
+                        className="h-9 px-4 rounded-full text-xs text-gray-400 border border-gray-700"
+                      >
+                        <X className="w-3.5 h-3.5 mr-1" /> Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {bgProcessing && (
+                  <div className="flex flex-col items-center justify-center gap-4 py-16">
+                    <Loader2 className="h-10 w-10 animate-spin text-cyan-500" />
+                    <p className="text-gray-400 font-medium">AI is working…</p>
+                    <p className="text-xs text-gray-500">{bgProgressText}</p>
+                  </div>
+                )}
+                {bgCompleted && (
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1 bg-gray-900/80 border border-gray-700 rounded-xl p-1">
+                        <button
+                          onClick={() =>
+                            setBgTool(bgTool === "restore" ? "none" : "restore")
+                          }
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${bgTool === "restore" ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40" : "text-gray-400 hover:text-white"}`}
+                        >
+                          <Brush className="w-3.5 h-3.5" /> Restore
+                        </button>
+                        <button
+                          onClick={() =>
+                            setBgTool(bgTool === "erase" ? "none" : "erase")
+                          }
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${bgTool === "erase" ? "bg-red-500/20 text-red-400 border border-red-500/40" : "text-gray-400 hover:text-white"}`}
+                        >
+                          <Eraser className="w-3.5 h-3.5" /> Erase
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2 bg-gray-900/80 border border-gray-700 rounded-xl px-3 py-1.5">
+                        <span className="text-[10px] text-gray-500 uppercase font-bold">
+                          Size
+                        </span>
+                        <Slider
+                          value={[bgBrushSize]}
+                          onValueChange={([v]) => setBgBrushSize(v)}
+                          min={5}
+                          max={100}
+                          step={5}
+                          className="no-sidebar-swipe w-24"
+                        />
+                        <span className="text-[10px] font-mono text-cyan-400/80 w-6">
+                          {bgBrushSize}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 bg-gray-900/80 border border-gray-700 rounded-xl p-1">
+                        <button
+                          onClick={() =>
+                            setBgZoom((z) => Math.max(0.1, z - 0.1))
+                          }
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-white"
+                        >
+                          <span className="text-xs font-bold">−</span>
+                        </button>
+                        <span className="text-[10px] text-gray-500 w-10 text-center">
+                          {Math.round(bgZoom * 100)}%
+                        </span>
+                        <button
+                          onClick={() => setBgZoom((z) => Math.min(5, z + 0.1))}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-white"
+                        >
+                          <span className="text-xs font-bold">+</span>
+                        </button>
+                      </div>
+                      <button
+                        onClick={handleBgUndo}
+                        disabled={bgHistory.length <= 1}
+                        className="p-2 rounded-xl bg-gray-900/80 border border-gray-700 text-gray-400 hover:text-white disabled:opacity-30 transition-all"
+                      >
+                        <Undo className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div
+                      ref={bgContainerRef}
+                      className="relative overflow-auto flex items-center justify-center rounded-xl border border-gray-800 bg-black/40"
+                      style={{ maxHeight: "50vh" }}
+                    >
+                      <div
+                        style={{
+                          width: bgDimensions
+                            ? bgDimensions.w * bgZoom
+                            : "auto",
+                          height: bgDimensions
+                            ? bgDimensions.h * bgZoom
+                            : "auto",
+                          backgroundImage:
+                            "repeating-conic-gradient(#1f2937 0% 25%, transparent 0% 50%)",
+                          backgroundSize: "16px 16px",
+                          borderRadius: 8,
+                          overflow: "hidden",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <canvas
+                          ref={bgCanvasRef}
+                          onMouseDown={bgStartDrawing}
+                          onMouseMove={bgDraw}
+                          onMouseUp={bgStopDrawing}
+                          onMouseLeave={bgStopDrawing}
+                          onTouchStart={bgStartDrawing}
+                          onTouchMove={bgDraw}
+                          onTouchEnd={bgStopDrawing}
+                          className="w-full h-full touch-none no-sidebar-swipe"
+                          style={{
+                            cursor: bgTool !== "none" ? "crosshair" : "default",
+                            display: "block",
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={handleBgApply}
+                        className="h-9 px-5 rounded-full font-medium text-xs gap-1.5 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white shadow-lg"
+                      >
+                        <Check className="w-3.5 h-3.5" /> Apply to Editor
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleBgDownload}
+                        className="h-9 px-5 rounded-full font-medium text-xs gap-1.5 bg-gray-800 hover:bg-gray-700 text-white border border-gray-700"
+                      >
+                        <Download className="w-3.5 h-3.5" /> Download PNG
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setBgCompleted(false);
+                          setBgHistory([]);
+                          setBgTool("none");
+                        }}
+                        className="h-9 px-4 rounded-full text-xs text-gray-400 border border-gray-700"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 mr-1" /> Redo
+                      </Button>
                     </div>
                   </div>
                 )}
               </div>
-              <TextPanel
-                layers={textLayers}
-                selectedId={selectedTextId}
-                onSelect={setSelectedTextId}
-                onAdd={addTextLayer}
-                onUpdate={updateTextLayer}
-                onDelete={deleteTextLayer}
-                onDuplicate={duplicateTextLayer}
-                onApply={handleTextApply}
-                onCancel={() => {
-                  setActiveMode("none");
-                  setTextLayers([]);
-                  setSelectedTextId(null);
-                }}
-                imageRef={imageRef}
-                containerRef={textContainerRef}
-              />
-            </div>
-          )}
+            )}
 
-          {/* NORMAL / INPAINT */}
-          {currentImagePreview &&
-            !isFullScreenMode &&
-            !isTextMode &&
-            activeJobs.length === 0 && (
-              <div className="no-sidebar-swipe relative rounded-xl overflow-hidden shadow-2xl border border-gray-800 bg-black/40 group w-fit h-auto animate-in fade-in duration-300">
-                <img
-                  ref={imageRef}
-                  src={currentImagePreview}
-                  alt="Work"
-                  crossOrigin="anonymous"
-                  className={`max-h-[65vh] max-w-full w-auto object-contain block ${isInpaintMode ? "cursor-crosshair" : ""}`}
-                  draggable={false}
-                />
-                <canvas
-                  ref={canvasRef}
-                  className={`absolute inset-0 z-10 touch-none ${isInpaintMode ? "block cursor-crosshair" : "hidden pointer-events-none"}`}
-                  onMouseDown={startDrawing}
-                  onMouseMove={draw}
-                  onMouseUp={stopDrawing}
-                  onMouseLeave={stopDrawing}
-                  onTouchStart={startDrawing}
-                  onTouchMove={draw}
-                  onTouchEnd={stopDrawing}
-                />
-                {!hasDrawnMask && (
-                  <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-white text-xs px-3 py-1.5 rounded-md pointer-events-none">
-                    {isInpaintMode ? "Draw mask area" : "Ready to Edit"}
+            {/* MAGIC ERASER MODE */}
+            {currentImagePreview && isEraserMode && (
+              <div className="w-full max-w-4xl flex flex-col gap-4 animate-in fade-in duration-200">
+                {mePreviewUrl && meDimensions && (
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 bg-gray-900/80 border border-gray-700 rounded-xl px-3 py-1.5">
+                      <span className="text-[10px] text-gray-500 uppercase font-bold">
+                        Brush
+                      </span>
+                      <Slider
+                        value={[meBrushSize]}
+                        onValueChange={([v]) => setMeBrushSize(v)}
+                        min={5}
+                        max={100}
+                        step={1}
+                        className="no-sidebar-swipe w-24"
+                      />
+                      <span className="text-[10px] font-mono text-red-400/80 w-6">
+                        {meBrushSize}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 bg-gray-900/80 border border-gray-700 rounded-xl p-1">
+                      <button
+                        onClick={() => setMeZoom((z) => Math.max(0.1, z - 0.1))}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-white text-xs font-bold"
+                      >
+                        −
+                      </button>
+                      <span className="text-[10px] text-gray-500 w-10 text-center">
+                        {Math.round(meZoom * 100)}%
+                      </span>
+                      <button
+                        onClick={() => setMeZoom((z) => Math.min(5, z + 0.1))}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-white text-xs font-bold"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <button
+                      onClick={handleMeUndo}
+                      disabled={meHistory.length === 0}
+                      className="p-2 rounded-xl bg-gray-900/80 border border-gray-700 text-gray-400 hover:text-white disabled:opacity-30 transition-all"
+                    >
+                      <Undo className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleClear}
-                  className="absolute top-3 right-3 h-10 w-10 rounded-full bg-black/60 hover:bg-red-600/90 text-white z-20 shadow-lg border border-white/20"
-                >
-                  {currentImagePreview !== originalImagePreview ? (
-                    <Undo2 className="h-5 w-5" />
-                  ) : (
-                    <XCircle className="h-6 w-6" />
-                  )}
-                </Button>
-                {!isInpaintMode && (
+                {mePreviewUrl && meDimensions && (
+                  <div
+                    ref={meContainerRef}
+                    className="relative overflow-auto flex items-center justify-center rounded-xl border border-gray-800 bg-black/40"
+                    style={{ maxHeight: "50vh" }}
+                  >
+                    {meIsProcessing && (
+                      <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm rounded-xl">
+                        <Loader2 className="h-10 w-10 animate-spin text-red-400 mb-3" />
+                        <p className="text-white text-sm font-medium animate-pulse">
+                          Removing object…
+                        </p>
+                      </div>
+                    )}
+                    <div
+                      style={{
+                        width: meDimensions.w * meZoom,
+                        height: meDimensions.h * meZoom,
+                        position: "relative",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <img
+                        src={mePreviewUrl}
+                        alt="Editing"
+                        className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                        style={{
+                          backgroundImage:
+                            "repeating-conic-gradient(#1f2937 0% 25%, transparent 0% 50%)",
+                          backgroundSize: "16px 16px",
+                        }}
+                      />
+                      <canvas
+                        ref={meCanvasRef}
+                        width={meDimensions.w}
+                        height={meDimensions.h}
+                        onMouseDown={meStartDrawing}
+                        onMouseMove={meDraw}
+                        onMouseUp={meStopDrawing}
+                        onMouseLeave={meStopDrawing}
+                        onTouchStart={meStartDrawing}
+                        onTouchMove={meDraw}
+                        onTouchEnd={meStopDrawing}
+                        className="absolute inset-0 w-full h-full touch-none cursor-crosshair opacity-70 no-sidebar-swipe"
+                      />
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center justify-center gap-2 flex-wrap">
+                  <Button
+                    size="sm"
+                    onClick={handleMeErase}
+                    disabled={meIsProcessing || !meReady}
+                    className="h-9 px-5 rounded-full font-medium text-xs gap-1.5 bg-red-600 hover:bg-red-500 text-white shadow-lg disabled:opacity-50"
+                  >
+                    {meIsProcessing ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <>
+                        <Eraser className="w-3.5 h-3.5" /> Erase
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleMeApply}
+                    disabled={!mePreviewUrl}
+                    className="h-9 px-5 rounded-full font-medium text-xs gap-1.5 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white shadow-lg disabled:opacity-40"
+                  >
+                    <Check className="w-3.5 h-3.5" /> Apply to Editor
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleMeDownload}
+                    disabled={!mePreviewUrl}
+                    className="h-9 px-5 rounded-full font-medium text-xs gap-1.5 bg-gray-800 hover:bg-gray-700 text-white border border-gray-700 disabled:opacity-40"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Download
+                  </Button>
                   <Button
                     variant="ghost"
-                    size="icon"
-                    onClick={handleDownload}
-                    className="absolute bottom-3 right-3 h-10 w-10 rounded-full bg-black/60 hover:bg-gray-700 text-white z-20 border border-white/20"
+                    size="sm"
+                    onClick={() => {
+                      setActiveMode("none");
+                      setMeHistory([]);
+                      setMePreviewUrl(null);
+                      setMeDimensions(null);
+                    }}
+                    className="h-9 px-4 rounded-full text-xs text-gray-400 border border-gray-700"
                   >
-                    <Download className="h-5 w-5" />
+                    <X className="w-3.5 h-3.5 mr-1" /> Cancel
                   </Button>
+                </div>
+                {!meReady && !meIsProcessing && (
+                  <p className="text-center text-xs text-gray-500 animate-pulse">
+                    Loading OpenCV model…
+                  </p>
                 )}
               </div>
             )}
 
-          {activeJobs.length > 0 && (
-            <div className="w-full max-w-lg aspect-4/3 rounded-lg border border-dashed border-gray-700 bg-gray-800/50 flex flex-col items-center justify-center animate-pulse">
-              <Loader2 className="h-10 w-10 animate-spin text-cyan-500 mb-4" />
-              <p className="text-gray-400 font-medium">Generating Magic...</p>
-            </div>
-          )}
+            {/* UPSCALE MODE */}
+            {currentImagePreview && isUpscaleMode && (
+              <div className="w-full max-w-4xl flex flex-col gap-4 animate-in fade-in duration-200">
+                {!upscaleResult && (
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="flex items-center gap-1 bg-gray-900/60 p-1 rounded-full border border-white/10">
+                      {(
+                        [
+                          ["2k", "2K (2×)", 10],
+                          ["4k", "4K (4×)", 20],
+                        ] as [string, string, number][]
+                      ).map(([id, label, cost]) => (
+                        <button
+                          key={id}
+                          onClick={() => setUpscaleLevel(id as "2k" | "4k")}
+                          className={`h-8 text-xs px-5 rounded-full font-semibold transition-all flex items-center gap-1.5 ${upscaleLevel === id ? "bg-gradient-to-r from-cyan-500 to-teal-500 text-white shadow-md" : "text-gray-400 hover:text-white"}`}
+                        >
+                          {label}
+                          <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${upscaleLevel === id ? "bg-white/20" : "bg-gray-800"}`}
+                          >
+                            {cost}🪙
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="relative rounded-xl overflow-hidden border border-gray-800 shadow-2xl">
+                      <img
+                        src={currentImagePreview}
+                        alt="Source"
+                        className="max-h-[48vh] max-w-full w-auto object-contain block"
+                      />
+                      {upscaleLoading && (
+                        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-10">
+                          <Loader2 className="h-10 w-10 animate-spin text-cyan-400" />
+                          <p className="text-white text-sm font-medium animate-pulse">
+                            Upscaling image…
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={handleUpscale}
+                        disabled={upscaleLoading}
+                        className="h-9 px-6 rounded-full font-medium text-xs gap-2 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white shadow-lg disabled:opacity-50"
+                      >
+                        {upscaleLoading ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <>
+                            <Maximize2 className="w-3.5 h-3.5" /> Upscale ·{" "}
+                            {upscaleCost} <Coins className="w-3 h-3" />
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setActiveMode("none")}
+                        className="h-9 px-4 rounded-full text-xs text-gray-400 border border-gray-700"
+                      >
+                        <X className="w-3.5 h-3.5 mr-1" /> Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {upscaleResult && (
+                  <div className="flex flex-col items-center gap-4">
+                    <CompareSlider
+                      original={currentImagePreview}
+                      enhanced={upscaleResult}
+                    />
+                    <div className="flex items-center gap-2 flex-wrap justify-center">
+                      <Button
+                        size="sm"
+                        onClick={handleUpscaleApply}
+                        className="h-9 px-5 rounded-full font-medium text-xs gap-1.5 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white shadow-lg"
+                      >
+                        <Check className="w-3.5 h-3.5" /> Apply to Editor
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleUpscaleDownload}
+                        className="h-9 px-5 rounded-full font-medium text-xs gap-1.5 bg-gray-800 hover:bg-gray-700 text-white border border-gray-700"
+                      >
+                        <Download className="w-3.5 h-3.5" /> Download
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setUpscaleResult(null)}
+                        className="h-9 px-4 rounded-full text-xs text-gray-400 border border-gray-700"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 mr-1" /> Try Again
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setUpscaleResult(null);
+                          setActiveMode("none");
+                        }}
+                        className="h-9 px-4 rounded-full text-xs text-gray-400 border border-gray-700"
+                      >
+                        <X className="w-3.5 h-3.5 mr-1" /> Close
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* SKIN ENHANCER MODE */}
+            {currentImagePreview && isSkinMode && (
+              <div className="w-full max-w-4xl flex flex-col gap-4 animate-in fade-in duration-200">
+                {!skinResult && (
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="flex flex-col md:flex-row items-start md:items-center gap-4 w-full max-w-2xl bg-gray-900/60 border border-gray-800 rounded-xl p-4">
+                      <div className="flex flex-col gap-2 flex-1 min-w-[160px]">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-medium text-gray-400">
+                            Enhancement Strength
+                          </span>
+                          <span className="text-[10px] text-teal-400 font-mono bg-teal-500/10 px-1.5 py-0.5 rounded">
+                            {Math.round(skinStrength * 100)}%
+                          </span>
+                        </div>
+                        <Slider
+                          min={0.1}
+                          max={0.7}
+                          step={0.05}
+                          value={[skinStrength]}
+                          onValueChange={([v]) => setSkinStrength(v)}
+                          disabled={skinLoading}
+                          className="no-sidebar-swipe [&_[data-radix-slider-range]]:!bg-teal-500 [&_[role=slider]]:border-teal-500"
+                        />
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {(
+                          [
+                            ["peachFuzz", "Peach Fuzz"],
+                            ["freckles", "Freckles"],
+                            ["acne", "Subtle Acne"],
+                            ["lensFlare", "Lens Flare"],
+                          ] as [keyof typeof skinFeatures, string][]
+                        ).map(([key, label]) => (
+                          <button
+                            key={key}
+                            onClick={() => toggleSkinFeature(key)}
+                            disabled={skinLoading}
+                            className={`h-7 px-3 text-[10px] rounded-full font-semibold border transition-all ${skinFeatures[key] ? "bg-cyan-500/20 border-cyan-500 text-cyan-400" : "bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200"}`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="relative rounded-xl overflow-hidden border border-gray-800 shadow-2xl">
+                      <img
+                        src={currentImagePreview}
+                        alt="Source"
+                        className="max-h-[45vh] max-w-full w-auto object-contain block"
+                      />
+                      {skinLoading && (
+                        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-10">
+                          <Loader2 className="h-10 w-10 animate-spin text-teal-400" />
+                          <p className="text-white text-sm font-medium animate-pulse">
+                            Enhancing skin…
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={handleSkinEnhance}
+                        disabled={skinLoading}
+                        className="h-9 px-6 rounded-full font-medium text-xs gap-2 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white shadow-lg disabled:opacity-50"
+                      >
+                        {skinLoading ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <>
+                            <Sparkles className="w-3.5 h-3.5" /> Enhance · 20{" "}
+                            <Coins className="w-3 h-3" />
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setActiveMode("none")}
+                        className="h-9 px-4 rounded-full text-xs text-gray-400 border border-gray-700"
+                      >
+                        <X className="w-3.5 h-3.5 mr-1" /> Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {skinResult && (
+                  <div className="flex flex-col items-center gap-4">
+                    <CompareSlider
+                      original={currentImagePreview}
+                      enhanced={skinResult}
+                    />
+                    <div className="flex items-center gap-2 flex-wrap justify-center">
+                      <Button
+                        size="sm"
+                        onClick={handleSkinApply}
+                        className="h-9 px-5 rounded-full font-medium text-xs gap-1.5 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white shadow-lg"
+                      >
+                        <Check className="w-3.5 h-3.5" /> Apply to Editor
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleSkinDownload}
+                        className="h-9 px-5 rounded-full font-medium text-xs gap-1.5 bg-gray-800 hover:bg-gray-700 text-white border border-gray-700"
+                      >
+                        <Download className="w-3.5 h-3.5" /> Download
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSkinResult(null)}
+                        className="h-9 px-4 rounded-full text-xs text-gray-400 border border-gray-700"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 mr-1" /> Redo
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setSkinResult(null);
+                          setActiveMode("none");
+                        }}
+                        className="h-9 px-4 rounded-full text-xs text-gray-400 border border-gray-700"
+                      >
+                        <X className="w-3.5 h-3.5 mr-1" /> Close
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* MAIN CANVAS (normal mode) */}
+            {currentImagePreview &&
+              !isFullScreenMode &&
+              !isTextMode &&
+              !isOverlayMode &&
+              !isBgRemoveMode &&
+              !isEraserMode &&
+              !isUpscaleMode &&
+              !isSkinMode &&
+              activeJobs.length === 0 && (
+                <div className="no-sidebar-swipe relative rounded-xl overflow-hidden shadow-2xl border border-gray-800 bg-black/40 group w-fit h-auto animate-in fade-in duration-300">
+                  <img
+                    ref={imageRef}
+                    src={currentImagePreview}
+                    alt="Work"
+                    crossOrigin="anonymous"
+                    className={`max-h-[65vh] max-w-full w-auto object-contain block ${isInpaintMode ? "cursor-crosshair" : ""}`}
+                    draggable={false}
+                  />
+                  <canvas
+                    ref={canvasRef}
+                    className={`absolute inset-0 z-10 touch-none ${isInpaintMode ? "block cursor-crosshair" : "hidden pointer-events-none"}`}
+                    onMouseDown={startDrawing}
+                    onMouseMove={draw}
+                    onMouseUp={stopDrawing}
+                    onMouseLeave={stopDrawing}
+                    onTouchStart={startDrawing}
+                    onTouchMove={draw}
+                    onTouchEnd={stopDrawing}
+                  />
+                  {!hasDrawnMask && (
+                    <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-white text-xs px-3 py-1.5 rounded-md pointer-events-none">
+                      {isInpaintMode ? "Draw mask area" : "Ready to Edit"}
+                    </div>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleClear}
+                    className="absolute top-3 right-3 h-10 w-10 rounded-full bg-black/60 hover:bg-red-600/90 text-white z-20 shadow-lg border border-white/20"
+                  >
+                    {currentImagePreview !== originalImagePreview ? (
+                      <Undo2 className="h-5 w-5" />
+                    ) : (
+                      <XCircle className="h-6 w-6" />
+                    )}
+                  </Button>
+                  {!isInpaintMode && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleDownload}
+                      className="absolute bottom-3 right-3 h-10 w-10 rounded-full bg-black/60 hover:bg-gray-700 text-white z-20 border border-white/20"
+                    >
+                      <Download className="h-5 w-5" />
+                    </Button>
+                  )}
+                </div>
+              )}
+
+            {activeJobs.length > 0 && (
+              <div className="w-full max-w-lg aspect-4/3 rounded-lg border border-dashed border-gray-700 bg-gray-800/50 flex flex-col items-center justify-center animate-pulse">
+                <Loader2 className="h-10 w-10 animate-spin text-cyan-500 mb-4" />
+                <p className="text-gray-400 font-medium">Generating Magic...</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* BOTTOM CONTROLS */}
       <div className="w-full px-4 pb-4 pt-2 bg-transparent">
-        {!isFullScreenMode && !isTextMode && (
-          <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-2 text-xs max-w-4xl mx-auto mb-3">
-            {currentImagePreview && !isLoading && (
-              <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => switchMode("crop")}
-                  className={`h-auto p-0 gap-2 text-xs hover:bg-transparent ${(activeMode as string) === "crop" ? "text-cyan-400 font-bold" : "text-gray-400 hover:text-gray-200"}`}
-                >
-                  <Crop className="w-4 h-4" />
-                  <span>Crop</span>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => switchMode("adjust")}
-                  className={`h-auto p-0 gap-2 text-xs hover:bg-transparent ${(activeMode as string) === "adjust" ? "text-cyan-400 font-bold" : "text-gray-400 hover:text-gray-200"}`}
-                >
-                  <SlidersHorizontal className="w-4 h-4" />
-                  <span>Adjust</span>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => switchMode("text")}
-                  className={`h-auto p-0 gap-2 text-xs hover:bg-transparent ${(activeMode as string) === "text" ? "text-cyan-400 font-bold" : "text-gray-400 hover:text-gray-200"}`}
-                >
-                  <Type className="w-4 h-4" />
-                  <span>Text</span>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => switchMode("inpaint")}
-                  className={`h-auto p-0 gap-2 text-xs hover:bg-transparent ${isInpaintMode ? "text-cyan-400 font-bold" : "text-gray-400 hover:text-gray-200"}`}
-                >
-                  <Paintbrush className="w-4 h-4" />
-                  <span>{isInpaintMode ? "Done" : "Inpaint"}</span>
-                </Button>
-              </>
-            )}
-            {isInpaintMode && (
-              <div className="flex items-center gap-3 ml-2 pl-3 border-l border-gray-700 animate-in fade-in slide-in-from-left-2">
-                <div className="flex bg-gray-800 rounded-md p-0.5">
+        {!isFullScreenMode &&
+          !isTextMode &&
+          !isOverlayMode &&
+          !isBgRemoveMode &&
+          !isEraserMode &&
+          !isUpscaleMode &&
+          !isSkinMode && (
+            <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-2 text-xs max-w-4xl mx-auto mb-3">
+              {currentImagePreview && !isLoading && (
+                <>
                   <Button
                     variant="ghost"
-                    size="icon"
-                    onClick={() => setDrawingTool("brush")}
-                    className={`h-6 w-6 rounded-sm ${drawingTool === "brush" ? "bg-gray-600 text-white" : "text-gray-400"}`}
+                    size="sm"
+                    onClick={() => switchMode("crop")}
+                    className={`h-auto p-0 gap-2 text-xs hover:bg-transparent ${(activeMode as ActiveMode) === "crop" ? "text-cyan-400 font-bold" : "text-gray-400 hover:text-gray-200"}`}
                   >
-                    <Paintbrush className="w-3.5 h-3.5" />
+                    <Crop className="w-4 h-4" />
+                    <span>Crop</span>
                   </Button>
                   <Button
                     variant="ghost"
-                    size="icon"
-                    onClick={() => setDrawingTool("eraser")}
-                    className={`h-6 w-6 rounded-sm ${drawingTool === "eraser" ? "bg-gray-600 text-white" : "text-gray-400"}`}
+                    size="sm"
+                    onClick={() => switchMode("adjust")}
+                    className={`h-auto p-0 gap-2 text-xs hover:bg-transparent ${(activeMode as ActiveMode) === "adjust" ? "text-cyan-400 font-bold" : "text-gray-400 hover:text-gray-200"}`}
                   >
-                    <Eraser className="w-3.5 h-3.5" />
+                    <SlidersHorizontal className="w-4 h-4" />
+                    <span>Adjust</span>
                   </Button>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Label className="text-[10px] text-gray-500 uppercase font-bold">
-                    Size
-                  </Label>
-                  <Slider
-                    value={[brushSize]}
-                    onValueChange={([v]) => setBrushSize(v)}
-                    min={5}
-                    max={100}
-                    step={5}
-                    className="no-sidebar-swipe w-20"
-                  />
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearMask}
-                  className="text-gray-400 hover:text-red-400 h-auto p-0"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {!isFullScreenMode && !isTextMode && (
-          <div className="flex flex-col gap-2 w-full max-w-4xl mx-auto">
-            <div className="relative w-full p-1 rounded-xl flex items-center gap-2 bg-transparent border border-gray-700 min-h-13.5">
-              {!currentImagePreview ? (
-                <div className="relative pl-2">
-                  <input
-                    ref={mainInputRef}
-                    type="file"
-                    className="hidden"
-                    accept="image/*"
-                    onChange={handleMainImageChange}
-                  />
                   <Button
                     variant="ghost"
-                    className="h-10 w-10 rounded-lg text-gray-400 hover:text-cyan-400 hover:bg-gray-800/50"
-                    onClick={() => mainInputRef.current?.click()}
+                    size="sm"
+                    onClick={() => switchMode("text")}
+                    className={`h-auto p-0 gap-2 text-xs hover:bg-transparent ${(activeMode as ActiveMode) === "text" ? "text-cyan-400 font-bold" : "text-gray-400 hover:text-gray-200"}`}
                   >
-                    <UploadCloud className="h-6 w-6" />
+                    <Type className="w-4 h-4" />
+                    <span>Text</span>
                   </Button>
-                </div>
-              ) : (
-                <div className="relative pl-2 flex items-center">
-                  <input
-                    ref={referenceInputRef}
-                    type="file"
-                    className="hidden"
-                    accept="image/*"
-                    onChange={handleReferenceImageChange}
-                  />
-                  {referencePreview ? (
-                    <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-cyan-500/50 group animate-in zoom-in-95 duration-200 shadow-md">
-                      <img
-                        src={referencePreview}
-                        className="w-full h-full object-cover"
-                        alt="Reference"
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => switchMode("inpaint")}
+                    className={`h-auto p-0 gap-2 text-xs hover:bg-transparent ${isInpaintMode ? "text-cyan-400 font-bold" : "text-gray-400 hover:text-gray-200"}`}
+                  >
+                    <Paintbrush className="w-4 h-4" />
+                    <span>{isInpaintMode ? "Done" : "Inpaint"}</span>
+                  </Button>
+                  {/* ── OVERLAY BUTTON ── */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      switchMode("overlay");
+                      setOverlays([]);
+                      setSelectedOverlayId(null);
+                    }}
+                    className={`h-auto p-0 gap-2 text-xs hover:bg-transparent ${(activeMode as ActiveMode) === "overlay" ? "text-cyan-400 font-bold" : "text-gray-400 hover:text-gray-200"}`}
+                  >
+                    <Eye className="w-4 h-4" />
+                    <span>Overlay</span>
+                  </Button>
+                  {/* ── AI TOOLS DROPDOWN ── */}
+                  <div ref={aiToolsRef} className="relative">
+                    <button
+                      onClick={() => setAiToolsOpen((o) => !o)}
+                      className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${
+                        ["bgremove", "eraser", "upscale", "skin"].includes(
+                          activeMode as string,
+                        )
+                          ? "text-cyan-400"
+                          : "text-gray-400 hover:text-gray-200"
+                      }`}
+                    >
+                      <Wand2 className="w-4 h-4" />
+                      <span>AI Tools</span>
+                      <ChevronDown
+                        className={`w-3 h-3 transition-transform duration-200 ${aiToolsOpen ? "rotate-180" : ""}`}
                       />
-                      <div
-                        className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer"
-                        onClick={removeReferenceImage}
-                      >
-                        <XCircle className="w-5 h-5 text-red-400" />
+                    </button>
+
+                    {aiToolsOpen && (
+                      <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 w-40 bg-gray-950/95 backdrop-blur border border-gray-800 rounded-lg shadow-xl shadow-black/60 overflow-hidden animate-in fade-in slide-in-from-bottom-1 duration-100">
+                        {[
+                          {
+                            icon: <Scissors className="w-3.5 h-3.5" />,
+                            label: "BG Remove",
+                            mode: "bgremove" as ActiveMode,
+                            free: true,
+                            action: () => {
+                              switchMode("bgremove");
+                              setBgCompleted(false);
+                              setBgHistory([]);
+                              setBgTool("none");
+                              setAiToolsOpen(false);
+                            },
+                          },
+                          {
+                            icon: <Eraser className="w-3.5 h-3.5" />,
+                            label: "Magic Eraser",
+                            mode: "eraser" as ActiveMode,
+                            free: true,
+                            action: () => {
+                              switchMode("eraser");
+                              setAiToolsOpen(false);
+                            },
+                          },
+                          {
+                            icon: <Maximize2 className="w-3.5 h-3.5" />,
+                            label: "Upscale",
+                            mode: "upscale" as ActiveMode,
+                            free: false,
+                            action: () => {
+                              switchMode("upscale");
+                              setUpscaleResult(null);
+                              setAiToolsOpen(false);
+                            },
+                          },
+                          {
+                            icon: <Sparkles className="w-3.5 h-3.5" />,
+                            label: "Skin Enhance",
+                            mode: "skin" as ActiveMode,
+                            free: false,
+                            action: () => {
+                              switchMode("skin");
+                              setSkinResult(null);
+                              setAiToolsOpen(false);
+                            },
+                          },
+                        ].map((tool, i, arr) => {
+                          const isActive =
+                            (activeMode as ActiveMode) === tool.mode;
+                          return (
+                            <button
+                              key={tool.mode}
+                              onClick={tool.action}
+                              className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors ${
+                                isActive
+                                  ? "bg-gray-800/80 text-white"
+                                  : "text-gray-400 hover:bg-gray-800/50 hover:text-gray-200"
+                              } ${i < arr.length - 1 ? "border-b border-gray-800/60" : ""}`}
+                            >
+                              <span className="flex items-center gap-2 text-[11px] font-medium">
+                                {tool.icon}
+                                {tool.label}
+                              </span>
+                              {tool.free && (
+                                <span className="text-[9px] font-bold px-1 py-px rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 leading-none">
+                                  FREE
+                                </span>
+                              )}
+                              {isActive && !tool.free && (
+                                <div className="w-1 h-1 rounded-full bg-cyan-400" />
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
-                    </div>
-                  ) : (
+                    )}
+                  </div>
+                </>
+              )}
+              {isInpaintMode && (
+                <div className="flex items-center gap-3 ml-2 pl-3 border-l border-gray-700 animate-in fade-in slide-in-from-left-2">
+                  <div className="flex bg-gray-800 rounded-md p-0.5">
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-10 w-10 rounded-lg text-gray-400 hover:text-cyan-400 hover:bg-gray-800/50 transition-colors"
-                      onClick={() => referenceInputRef.current?.click()}
-                      disabled={isLoading}
+                      onClick={() => setDrawingTool("brush")}
+                      className={`h-6 w-6 rounded-sm ${drawingTool === "brush" ? "bg-gray-600 text-white" : "text-gray-400"}`}
                     >
-                      <Paperclip className="h-5 w-5" />
+                      <Paintbrush className="w-3.5 h-3.5" />
                     </Button>
-                  )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setDrawingTool("eraser")}
+                      className={`h-6 w-6 rounded-sm ${drawingTool === "eraser" ? "bg-gray-600 text-white" : "text-gray-400"}`}
+                    >
+                      <Eraser className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-[10px] text-gray-500 uppercase font-bold">
+                      Size
+                    </Label>
+                    <Slider
+                      value={[brushSize]}
+                      onValueChange={([v]) => setBrushSize(v)}
+                      min={5}
+                      max={100}
+                      step={5}
+                      className="no-sidebar-swipe w-20"
+                    />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearMask}
+                    className="text-gray-400 hover:text-red-400 h-auto p-0"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 </div>
               )}
-              <div className="relative grow">
-                <Textarea
-                  ref={textareaRef}
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  placeholder={
-                    referencePreview
-                      ? "Describe how to use this reference..."
-                      : "Describe the edit..."
-                  }
-                  className="w-full bg-transparent border-none focus:ring-0 resize-none text-sm md:text-base text-gray-200 placeholder-gray-500 py-3 min-h-12.5 max-h-20 leading-tight"
-                  rows={1}
-                  maxLength={1000}
-                  disabled={isLoading || !currentImagePreview}
-                />
-              </div>
-              <div className="pr-2">
-                <Button
-                  onClick={handleGenerate}
-                  disabled={
-                    isLoading ||
-                    !currentImagePreview ||
-                    (isInpaintMode && !hasDrawnMask) ||
-                    !prompt
-                  }
-                  className={`h-9 px-4 rounded-full font-medium transition-all text-xs flex items-center gap-1.5 ${isLoading || !currentImagePreview || (isInpaintMode && !hasDrawnMask) || !prompt ? "bg-gray-700 text-gray-500 cursor-not-allowed" : "bg-linear-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white shadow-lg"}`}
-                >
-                  {isLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <>
-                      <span className="whitespace-nowrap">10</span>
-                      <Coins className="w-3.5 h-3.5" />
-                    </>
-                  )}
-                </Button>
+            </div>
+          )}
+
+        {!isFullScreenMode &&
+          !isTextMode &&
+          !isOverlayMode &&
+          !isBgRemoveMode &&
+          !isEraserMode &&
+          !isUpscaleMode &&
+          !isSkinMode && (
+            <div className="flex flex-col gap-2 w-full max-w-4xl mx-auto">
+              <div className="relative w-full p-1 rounded-xl flex items-center gap-2 bg-transparent border border-gray-700 min-h-13.5">
+                {!currentImagePreview ? (
+                  <div className="relative pl-2">
+                    <input
+                      ref={mainInputRef}
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={handleMainImageChange}
+                    />
+                    <Button
+                      variant="ghost"
+                      className="h-10 w-10 rounded-lg text-gray-400 hover:text-cyan-400 hover:bg-gray-800/50"
+                      onClick={() => mainInputRef.current?.click()}
+                    >
+                      <UploadCloud className="h-6 w-6" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="relative pl-2 flex items-center">
+                    <input
+                      ref={referenceInputRef}
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={handleReferenceImageChange}
+                    />
+                    {referencePreview ? (
+                      <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-cyan-500/50 group animate-in zoom-in-95 duration-200 shadow-md">
+                        <img
+                          src={referencePreview}
+                          className="w-full h-full object-cover"
+                          alt="Reference"
+                        />
+                        <div
+                          className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer"
+                          onClick={removeReferenceImage}
+                        >
+                          <XCircle className="w-5 h-5 text-red-400" />
+                        </div>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-10 w-10 rounded-lg text-gray-400 hover:text-cyan-400 hover:bg-gray-800/50 transition-colors"
+                        onClick={() => referenceInputRef.current?.click()}
+                        disabled={isLoading}
+                      >
+                        <Paperclip className="h-5 w-5" />
+                      </Button>
+                    )}
+                  </div>
+                )}
+                <div className="relative grow">
+                  <Textarea
+                    ref={textareaRef}
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    placeholder={
+                      referencePreview
+                        ? "Describe how to use this reference..."
+                        : "Describe the edit..."
+                    }
+                    className="w-full bg-transparent border-none focus:ring-0 resize-none text-sm md:text-base text-gray-200 placeholder-gray-500 py-3 min-h-12.5 max-h-20 leading-tight"
+                    rows={1}
+                    maxLength={1000}
+                    disabled={isLoading || !currentImagePreview}
+                  />
+                </div>
+                <div className="pr-2">
+                  <Button
+                    onClick={handleGenerate}
+                    disabled={
+                      isLoading ||
+                      !currentImagePreview ||
+                      (isInpaintMode && !hasDrawnMask) ||
+                      !prompt
+                    }
+                    className={`h-9 px-4 rounded-full font-medium transition-all text-xs flex items-center gap-1.5 ${isLoading || !currentImagePreview || (isInpaintMode && !hasDrawnMask) || !prompt ? "bg-gray-700 text-gray-500 cursor-not-allowed" : "bg-linear-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white shadow-lg"}`}
+                  >
+                    {isLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <span className="whitespace-nowrap">10</span>
+                        <Coins className="w-3.5 h-3.5" />
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
       </div>
 
       <AuthModal

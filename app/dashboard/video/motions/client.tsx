@@ -1,758 +1,1176 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Loader2,
-  Download,
-  Sparkles,
-  Key,
-  Eye,
-  EyeOff,
-  AlertCircle,
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  Settings2,
-} from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { toast } from "sonner";
-import { Player } from "@remotion/player";
-import { renderMediaOnWeb } from "@remotion/web-renderer";
-import { transform } from "sucrase";
-import * as remotion from "remotion";
+import {
+  Play,
+  Code2,
+  Copy,
+  Check,
+  Sparkles,
+  ChevronRight,
+  AlertCircle,
+  RefreshCw,
+  ExternalLink,
+  Bot,
+  Download,
+  Loader2,
+  ChevronDown,
+  ImageIcon,
+  UploadCloud,
+  Trash2,
+  Search,
+} from "lucide-react";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-type Provider = "gemini" | "openrouter";
+import { Player, PlayerRef } from "@remotion/player";
+import * as Remotion from "remotion";
+import { transform } from "@babel/standalone";
 
-const OPENROUTER_MODELS = [
-  { id: "google/gemini-2.0-flash-001", label: "Gemini 2.0 Flash" },
-  { id: "anthropic/claude-3.5-haiku", label: "Claude 3.5 Haiku" },
-  { id: "anthropic/claude-sonnet-4-5", label: "Claude Sonnet 4.5" },
-  { id: "openai/gpt-4o-mini", label: "GPT-4o Mini" },
-  { id: "openai/gpt-4o", label: "GPT-4o" },
-  { id: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B" },
-  { id: "deepseek/deepseek-coder", label: "DeepSeek Coder" },
-  { id: "qwen/qwen-2.5-coder-32b-instruct", label: "Qwen 2.5 Coder 32B" },
+const GPT_URL =
+  "https://chatgpt.com/g/g-69c95eca14408191bb0390ddd0b977c8-remotion-deepshark-ai";
+
+const EXAMPLE_PROMPTS = [
+  "A glowing neon circle that pulses and spins (16:9, 5s)",
+  "3D text flying in from the left with shadow trail (9:16, 3s)",
+  "Particles exploding from center like fireworks (1:1, 10s)",
+  "Countdown timer from 5 to 0 with dramatic scale",
+  "Liquid morphing blobs in teal and purple",
+  "Cinematic title card with film grain effect",
 ];
 
-// ─── System Prompt ────────────────────────────────────────────────────────────
-const SYSTEM_PROMPT = `
-You are an expert Remotion motion graphics coder.
-The user will describe an animation and you will return ONLY a valid JavaScript function.
-
-STRICT RULES:
-- Return ONLY the raw JS function code. No markdown. No backticks. No explanation.
-- Do NOT use import or export statements.
-- All remotion hooks/functions come from the injected global: window.__remotion__
-- Destructure what you need at the TOP of the function like:
-    const { useCurrentFrame, useVideoConfig, AbsoluteFill, interpolate, spring, Sequence } = window.__remotion__;
-- The function MUST be named exactly: RemotionComp
-- Use ONLY inline styles. No Tailwind. No CSS classes.
-- Do NOT reference external images or fonts.
-- Use Math.sin, Math.cos, Math.PI freely for animations.
-- Make it visually stunning — use colors, gradients, shadows, transforms.
-- durationInFrames will be 180 (6 seconds at 30fps). Design for this.
-
-EXAMPLE OUTPUT:
-function RemotionComp() {
-  const { useCurrentFrame, useVideoConfig, AbsoluteFill, interpolate, spring } = window.__remotion__;
+const STARTER_CODE = `function MyComposition() {
   const frame = useCurrentFrame();
-  const { fps, width, height } = useVideoConfig();
+  const { fps } = useVideoConfig();
 
-  const scale = spring({ frame, fps, config: { damping: 10, stiffness: 80 } });
-  const opacity = interpolate(frame, [0, 20], [0, 1], { extrapolateRight: 'clamp' });
+  const loopFrame = frame % 150;
 
-  return (
-    <AbsoluteFill style={{ background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{
-        transform: \`scale(\${scale})\`,
-        opacity,
-        color: '#fff',
-        fontSize: 80,
-        fontWeight: 900,
-        fontFamily: 'system-ui',
-        textShadow: '0 0 40px #0ff'
-      }}>
-        HELLO
-      </div>
-    </AbsoluteFill>
+  const scale = spring({
+    frame: loopFrame,
+    fps,
+    from: 0.8,
+    to: 1,
+    config: { damping: 10, stiffness: 100 }
+  });
+
+  const rotate = interpolate(loopFrame, [0, 150], [0, 360]);
+
+  const glow = interpolate(
+    Math.sin((loopFrame / 150) * Math.PI * 2),
+    [-1, 1],
+    [0.4, 1]
   );
-}
-
-Now generate a stunning animation for the user's prompt. Return ONLY the function.
-`.trim();
-
-// ─── Eval Remotion Code ───────────────────────────────────────────────────────
-function evalRemotionComponent(rawCode: string): React.ComponentType {
-  (window as any).__remotion__ = remotion;
-  (window as any).React = React;
-
-  const cleaned = rawCode
-    .replace(/```(?:jsx?|tsx?|javascript)?/gi, "")
-    .replace(/```/g, "")
-    .trim();
-
-  const { code } = transform(cleaned, {
-    transforms: ["jsx"],
-    jsxPragma: "React.createElement",
-    jsxFragmentPragma: "React.Fragment",
-    filePath: "remotion-comp.jsx",
-  });
-
-  const wrapped = `
-    const React = window.React;
-    ${code}
-    return RemotionComp;
-  `;
-
-  // eslint-disable-next-line no-new-func
-  const factory = new Function(wrapped);
-  const Comp = factory();
-  if (typeof Comp !== "function")
-    throw new Error("No valid component returned");
-  return Comp;
-}
-
-// ─── Gemini API Call ──────────────────────────────────────────────────────────
-async function callGemini(apiKey: string, userPrompt: string): Promise<string> {
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: [{ parts: [{ text: userPrompt }] }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 4096 },
-      }),
-    },
-  );
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err?.error?.message || `Gemini error ${res.status}`);
-  }
-  const data = await res.json();
-  return data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-}
-
-// ─── OpenRouter API Call ──────────────────────────────────────────────────────
-async function callOpenRouter(
-  apiKey: string,
-  model: string,
-  userPrompt: string,
-): Promise<string> {
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": window.location.origin,
-      "X-Title": "DeepShark Motion",
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: 0.4,
-      max_tokens: 4096,
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err?.error?.message || `OpenRouter error ${res.status}`);
-  }
-  const data = await res.json();
-  return data?.choices?.[0]?.message?.content || "";
-}
-
-// ─── Placeholder Component ────────────────────────────────────────────────────
-const PlaceholderComp: React.FC = () => {
-  const { AbsoluteFill, useCurrentFrame, interpolate } = remotion;
-  const frame = useCurrentFrame();
-  const opacity = interpolate(frame, [0, 40], [0, 1], {
-    extrapolateRight: "clamp",
-  });
-  const float = Math.sin(frame / 20) * 8;
 
   return (
     <AbsoluteFill
       style={{
-        background:
-          "radial-gradient(ellipse at 50% 50%, #0a0a0f 0%, #000 100%)",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
+        background: "radial-gradient(circle at center, #020617, #020617 60%, #000)",
         justifyContent: "center",
-        gap: 16,
-        opacity,
+        alignItems: "center"
       }}
     >
+      {/* Rotating loading ring */}
       <div
         style={{
-          width: 64,
-          height: 64,
+          position: "absolute",
+          width: 500,
+          height: 500,
           borderRadius: "50%",
-          background: "linear-gradient(135deg, #14b8a6, #6366f1)",
-          transform: `translateY(${float}px)`,
-          boxShadow: "0 0 40px #14b8a655",
+          border: "6px solid rgba(0,255,200,0.1)",
+          borderTop: "6px solid rgba(0,255,200,0.9)",
+          transform: \`rotate(\${rotate}deg)\`,
+          boxShadow: \`0 0 30px rgba(0,255,200,\${glow})\`
         }}
       />
-      <p
+
+      {/* Glow pulse */}
+      <div
         style={{
-          color: "rgba(255,255,255,0.25)",
-          fontSize: 18,
-          fontFamily: "system-ui",
-          transform: `translateY(${float * 0.5}px)`,
+          position: "absolute",
+          width: 400,
+          height: 400,
+          borderRadius: "50%",
+          background: "radial-gradient(circle, rgba(0,255,200,0.3), transparent 70%)",
+          filter: "blur(40px)",
+          opacity: glow
+        }}
+      />
+
+      {/* Logo */}
+      <Img
+        src={"/logo.png"}
+        style={{
+          width: 300,
+          height: 300,
+          transform: \`scale(\${scale}) rotate(\${rotate * 0.2}deg)\`,
+          filter: \`drop-shadow(0 0 20px rgba(0,255,200,\${glow}))\`
+        }}
+      />
+
+      {/* Loading text */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: "15%",
+          fontSize: 40,
+          color: "rgba(200,255,240,0.9)",
+          letterSpacing: 6,
+          fontWeight: "bold",
+          textShadow: \`0 0 10px rgba(0,255,200,\${glow})\`
         }}
       >
-        Describe your animation below
-      </p>
+        LOADING
+      </div>
     </AbsoluteFill>
   );
+}`;
+
+// ── Types ───────────────────────────────────────────────────────────────────
+type Asset = {
+  id: string;
+  name: string;
+  type: "image" | "video";
+  url: string;
+  file: File;
 };
 
-// ─── Provider Config Panel ────────────────────────────────────────────────────
-function ProviderPanel({
-  provider,
-  setProvider,
-  geminiKey,
-  onSaveGemini,
-  openRouterKey,
-  onSaveOpenRouter,
-  openRouterModel,
-  setOpenRouterModel,
-}: {
-  provider: Provider;
-  setProvider: (p: Provider) => void;
-  geminiKey: string;
-  onSaveGemini: (k: string) => void;
-  openRouterKey: string;
-  onSaveOpenRouter: (k: string) => void;
-  openRouterModel: string;
-  setOpenRouterModel: (m: string) => void;
-}) {
-  const [geminiInput, setGeminiInput] = useState(geminiKey);
-  const [orInput, setOrInput] = useState(openRouterKey);
-  const [showGemini, setShowGemini] = useState(false);
-  const [showOR, setShowOR] = useState(false);
-  const [open, setOpen] = useState(!geminiKey && !openRouterKey);
+// ── Compiler ────────────────────────────────────────────────────────────────
+function compileCode(codeString: string, assets: Asset[] = []): React.FC {
+  let safe = codeString
+    .replace(/import\s+[\s\S]*?from\s+['"].*?['"];?\n?/g, "")
+    .replace(/export\s+default\s+\w+;?\n?/g, "")
+    .replace(/export\s+(const|let|var|function|class)\s+/g, "$1 ")
+    .replace(/\/mnt\/data\/[^"'`]+/g, "/logo.png"); // Silently fix ChatGPT internal paths
 
-  const geminiSaved = !!geminiKey && geminiKey === geminiInput;
-  const orSaved = !!openRouterKey && openRouterKey === orInput;
+  // 🌟 Magic Asset Replacer
+  assets.forEach((asset) => {
+    const escapedName = asset.name.replace(/\./g, "\\.");
+    const regex = new RegExp(`['"\`]\/?${escapedName}['"\`]`, "g");
+    safe = safe.replace(regex, `"${asset.url}"`);
+  });
+
+  safe = safe.trim();
+
+  const transpiled = transform(safe, {
+    presets: ["react"],
+    filename: "motion.jsx",
+  }).code;
+
+  const exec = new Function(
+    "React",
+    "Remotion",
+    `
+    const {
+      AbsoluteFill, useCurrentFrame, useVideoConfig,
+      spring, interpolate, Easing, Sequence, Series,
+      Audio, Img, Video, Loop, random,
+    } = Remotion;
+    ${transpiled}
+    if (typeof MyComposition === 'undefined')
+      throw new Error('Component must be named MyComposition');
+    return MyComposition;
+  `,
+  );
+
+  return exec(React, Remotion);
+}
+
+// ── Export helpers ──────────────────────────────────────────────────────────
+
+async function exportAnimation(
+  containerRef: React.RefObject<HTMLDivElement | null>,
+  playerRef: React.RefObject<PlayerRef | null>,
+  durationFrames: number,
+  fps: number,
+  compWidth: number,
+  compHeight: number,
+  setExporting: (v: boolean) => void,
+  setExportProgress: (p: number) => void,
+) {
+  setExporting(true);
+  setExportProgress(0);
+
+  try {
+    // 🌟 1. Verify Browser Support
+    if (!("VideoEncoder" in window)) {
+      throw new Error(
+        "Your browser does not support offline video encoding. Please use Chrome or Edge.",
+      );
+    }
+
+    const root = containerRef.current;
+    if (!root) throw new Error("Remotion player not found.");
+
+    const iframe = root.querySelector("iframe") as HTMLIFrameElement | null;
+    const captureTarget = iframe?.contentDocument?.body || root;
+
+    const displayW = root.clientWidth || compWidth / 2;
+    const displayH = root.clientHeight || compHeight / 2;
+
+    const offscreen = document.createElement("canvas");
+    offscreen.width = compWidth;
+    offscreen.height = compHeight;
+    const ctx = offscreen.getContext("2d")!;
+
+    // 🌟 2. Load Robust MP4 Encoder (Fixes VLC Corruption & WebM issues)
+    if (!(window as any).Mp4Muxer) {
+      await new Promise<void>((res, rej) => {
+        const s = document.createElement("script");
+        s.src = "https://unpkg.com/mp4-muxer/build/mp4-muxer.js";
+        s.onload = () => res();
+        s.onerror = () => rej(new Error("Failed to load mp4-muxer"));
+        document.head.appendChild(s);
+      });
+    }
+
+    if (!(window as any).htmlToImage) {
+      await new Promise<void>((res, rej) => {
+        const s = document.createElement("script");
+        s.src =
+          "https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.min.js";
+        s.onload = () => res();
+        s.onerror = () => rej(new Error("Failed to load html-to-image"));
+        document.head.appendChild(s);
+      });
+    }
+
+    const Mp4Muxer = (window as any).Mp4Muxer;
+    const htmlToImage = (window as any).htmlToImage;
+    const VideoEncoderAny = (window as any).VideoEncoder;
+    const VideoFrameAny = (window as any).VideoFrame;
+
+    // 🌟 3. Setup MP4 Muxer
+    const muxer = new Mp4Muxer.Muxer({
+      target: new Mp4Muxer.ArrayBufferTarget(),
+      video: {
+        codec: "avc", // H.264 guarantees VLC/Apple compatibility
+        width: compWidth,
+        height: compHeight,
+      },
+      fastStart: "in-memory", // CRITICAL: Places video metadata at the start so VLC can read it instantly
+    });
+
+    const videoEncoder = new VideoEncoderAny({
+      output: (chunk: any, meta: any) => muxer.addVideoChunk(chunk, meta),
+      error: (e: any) => {
+        throw new Error(`Encoding error: ${e.message}`);
+      },
+    });
+
+    videoEncoder.configure({
+      codec: "avc1.420028", // H.264 Baseline Profile (Most compatible)
+      width: compWidth,
+      height: compHeight,
+      bitrate: 10_000_000, // 10 Mbps for crisp HD quality
+      framerate: fps,
+    });
+
+    toast.info("Building perfect HD video...", {
+      description:
+        "Frame-by-frame encoding ensures zero lag. (Audio requires post-editing)",
+      duration: 5000,
+    });
+
+    // Pause player during export to avoid visual tearing
+    playerRef.current?.pause();
+
+    // 🌟 4. Offline Frame-by-Frame Loop (Guarantees perfect timing!)
+    for (let frame = 0; frame < durationFrames; frame++) {
+      playerRef.current?.seekTo(frame);
+
+      // Let the DOM settle and images load
+      await new Promise((r) => setTimeout(r, 60));
+
+      const snapCanvas = await htmlToImage.toCanvas(captureTarget, {
+        pixelRatio: compWidth / displayW,
+        width: displayW,
+        height: displayH,
+        backgroundColor: "#000000",
+        skipFonts: true,
+      });
+
+      ctx.clearRect(0, 0, compWidth, compHeight);
+      ctx.drawImage(snapCanvas, 0, 0, compWidth, compHeight);
+
+      // Math.round() prevents float timestamp corruption
+      const timestamp = Math.round((frame * 1000000) / fps);
+      const duration = Math.round(1000000 / fps);
+
+      const videoFrame = new VideoFrameAny(offscreen, {
+        timestamp,
+        duration,
+      });
+
+      videoEncoder.encode(videoFrame, { keyFrame: frame % 30 === 0 });
+      videoFrame.close();
+
+      setExportProgress(Math.round(((frame + 1) / durationFrames) * 100));
+    }
+
+    // 🌟 5. Finalize MP4 & Download
+    await videoEncoder.flush();
+    muxer.finalize();
+
+    const buffer = muxer.target.buffer;
+    const blob = new Blob([buffer], { type: "video/mp4" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `motion-export.mp4`;
+    a.click();
+
+    URL.revokeObjectURL(url);
+    toast.success("Export successful! Saved as .mp4");
+  } catch (err: any) {
+    toast.error(`Export failed: ${err.message}`);
+  } finally {
+    setExporting(false);
+    setExportProgress(0);
+  }
+}
+
+// ── Component ───────────────────────────────────────────────────────────────
+
+export default function MotionGeneratorPage() {
+  const [code, setCode] = useState(STARTER_CODE);
+  const [assets, setAssets] = useState<Asset[]>([]);
+
+  const [compiled, setCompiled] = useState<React.FC | null>(() => {
+    try {
+      return compileCode(STARTER_CODE, []);
+    } catch {
+      return null;
+    }
+  });
+
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<"editor" | "guide" | "assets">(
+    "editor",
+  );
+
+  // Search State
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Customization State
+  const [ratio, setRatio] = useState<"16:9" | "9:16" | "1:1">("16:9");
+  const [durationSec, setDurationSec] = useState<number>(5);
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [openMenu, setOpenMenu] = useState<"ratio" | "duration" | null>(null);
+
+  const playerRef = useRef<PlayerRef>(null as unknown as PlayerRef);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-naming counters
+  const imageCountRef = useRef(0);
+  const videoCountRef = useRef(0);
+
+  useEffect(() => {
+    const closeMenu = () => setOpenMenu(null);
+    window.addEventListener("click", closeMenu);
+    return () => window.removeEventListener("click", closeMenu);
+  }, []);
+
+  const FPS = 30;
+  const DURATION_FRAMES = durationSec * FPS;
+
+  const dimensions = {
+    "16:9": { w: 1920, h: 1080 },
+    "9:16": { w: 1080, h: 1920 },
+    "1:1": { w: 1080, h: 1080 },
+  }[ratio];
+
+  const handleSearch = useCallback(
+    (e?: React.KeyboardEvent) => {
+      if (e) e.preventDefault();
+      if (!searchQuery || !textareaRef.current) return;
+
+      const text = code.toLowerCase();
+      const query = searchQuery.toLowerCase();
+      const currentPos = textareaRef.current.selectionEnd || 0;
+
+      // Find next occurrence
+      let nextIndex = text.indexOf(query, currentPos);
+
+      // If not found, wrap around to the top
+      if (nextIndex === -1) {
+        nextIndex = text.indexOf(query);
+        if (nextIndex === -1) {
+          toast.error("Text not found in code");
+          return;
+        }
+      }
+
+      // 🌟 Focus the textarea so the browser natively highlights the text in blue!
+      textareaRef.current.focus();
+      textareaRef.current.setSelectionRange(
+        nextIndex,
+        nextIndex + query.length,
+      );
+      // (Removed the line that forced focus back to the search bar)
+
+      // Auto-scroll logic based on line height
+      const linesBefore = code.substring(0, nextIndex).split("\n").length;
+      const lineHeight = 18.5; // Approximate line height
+      textareaRef.current.scrollTop = Math.max(
+        0,
+        (linesBefore - 3) * lineHeight,
+      );
+    },
+    [code, searchQuery],
+  );
+
+  const handleRun = useCallback(() => {
+    try {
+      if (code.includes("/mnt/data/")) {
+        toast.warning(
+          "ChatGPT internal image removed. Upload your file to the 'Assets' tab and reference its new name!",
+          { duration: 8000 },
+        );
+      }
+
+      // 🌟 NEW: Validate missing assets
+      const requiredAssetsMatch =
+        code.match(/\/[a-zA-Z0-9_-]+\.(png|jpg|jpeg|mp4|webm|gif|webp)/gi) ||
+        [];
+      const missingAssets = Array.from(
+        new Set(
+          requiredAssetsMatch.filter((path) => {
+            if (path.toLowerCase() === "/logo.png") return false; // Ignore our default
+            const filename = path.replace(/^\//, "");
+            return !assets.some(
+              (a) => a.name.toLowerCase() === filename.toLowerCase(),
+            );
+          }),
+        ),
+      );
+
+      if (missingAssets.length > 0) {
+        toast.warning(
+          `You referenced ${missingAssets.join(", ")} but haven't uploaded it. Please add it in the Assets tab!`,
+          { duration: 8000 },
+        );
+      } else if (!code.includes("/mnt/data/")) {
+        toast.success("Animation running!");
+      }
+
+      const comp = compileCode(code, assets);
+      setCompiled(() => comp);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message);
+      setCompiled(null);
+      toast.error("Fix the code error first");
+    }
+  }, [code, assets]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Run animation on CMD+Enter
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      handleRun();
+      return;
+    }
+
+    // 🌟 Magic Find-Next Handler:
+    // If the search bar is open and the highlighted text perfectly matches the search query,
+    // pressing Enter will jump to the next result instead of making a new line!
+    if (e.key === "Enter" && showSearch && searchQuery && textareaRef.current) {
+      const start = textareaRef.current.selectionStart;
+      const end = textareaRef.current.selectionEnd;
+
+      if (start !== end) {
+        const selectedText = code.substring(start, end).toLowerCase();
+        if (selectedText === searchQuery.toLowerCase()) {
+          e.preventDefault(); // Stop it from making a gap/newline
+          handleSearch(); // Jump to the next result!
+        }
+      }
+    }
+  };
+
+  const copyCode = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast.success("Code copied!");
+  };
+
+  const resetCode = () => {
+    setCode(STARTER_CODE);
+    setError(null);
+    try {
+      const comp = compileCode(STARTER_CODE, assets);
+      setCompiled(() => comp);
+    } catch {}
+  };
+
+  const handleExport = () => {
+    if (!compiled) {
+      toast.error("Run an animation first.");
+      return;
+    }
+    exportAnimation(
+      containerRef,
+      playerRef,
+      DURATION_FRAMES,
+      FPS,
+      dimensions.w,
+      dimensions.h,
+      setExporting,
+      setExportProgress,
+    );
+  };
+
+  // ── File Upload Handlers ──
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+
+    const newAssets: Asset[] = [];
+    Array.from(e.target.files).forEach((file) => {
+      const isVideo = file.type.startsWith("video/");
+      const type = isVideo ? "video" : "image";
+
+      const extMatch = file.name.match(/\.([a-zA-Z0-9]+)$/);
+      const ext = extMatch ? extMatch[1] : isVideo ? "mp4" : "png";
+
+      let autoName = "";
+      if (isVideo) {
+        videoCountRef.current += 1;
+        autoName = `video${videoCountRef.current}.${ext}`;
+      } else {
+        imageCountRef.current += 1;
+        autoName = `image${imageCountRef.current}.${ext}`;
+      }
+
+      newAssets.push({
+        id: Math.random().toString(36).substring(2, 9),
+        name: autoName,
+        type,
+        url: URL.createObjectURL(file),
+        file,
+      });
+    });
+
+    setAssets((prev) => [...prev, ...newAssets]);
+    toast.success(`${newAssets.length} file(s) added!`);
+    e.target.value = "";
+  };
+
+  const removeAsset = (id: string) => {
+    setAssets((prev) => {
+      const target = prev.find((a) => a.id === id);
+      if (target) URL.revokeObjectURL(target.url);
+      return prev.filter((a) => a.id !== id);
+    });
+  };
 
   return (
-    <div className="w-full max-w-3xl mx-auto mb-3">
-      {/* Toggle row */}
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300 transition-colors mb-2"
-      >
-        <Settings2 className="h-3.5 w-3.5" />
-        {open ? "Hide" : "Show"} API settings
-        {open ? (
-          <ChevronDown className="h-3 w-3" />
-        ) : (
-          <ChevronRight className="h-3 w-3" />
-        )}
-      </button>
+    <div className="flex flex-col h-[calc(100vh-64px)] bg-transparent text-gray-200 overflow-hidden">
+      {/* ── TOP BAR ── */}
+      <div className="shrink-0 flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06] bg-black/30 backdrop-blur-sm">
+        <div className="flex items-center gap-2.5">
+          <Sparkles className="w-4 h-4 text-teal-400 shrink-0" />
+          <span className="text-sm font-semibold text-white">
+            Motion Generator
+          </span>
+          <span className="hidden sm:inline text-[10px] px-2 py-0.5 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-400">
+            Free
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <a
+            href={GPT_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 transition-all"
+          >
+            <Bot className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Open GPT</span>
+            <ExternalLink className="w-3 h-3 opacity-50" />
+          </a>
+          <button
+            onClick={handleRun}
+            className="flex items-center gap-1.5 text-xs font-semibold px-4 py-1.5 rounded-lg bg-teal-500/20 border border-teal-500/40 text-teal-300 hover:bg-teal-500/30 transition-all active:scale-[0.97]"
+          >
+            <Play className="w-3 h-3" />
+            <span>Run</span>
+            <span className="hidden sm:inline text-[10px] text-teal-500/50 ml-0.5">
+              ⌘↵
+            </span>
+          </button>
+        </div>
+      </div>
 
-      {open && (
-        <div className="rounded-xl border border-white/8 bg-gray-900/60 p-4 space-y-4">
-          {/* Provider tabs */}
-          <div className="flex gap-2">
-            {(["gemini", "openrouter"] as Provider[]).map((p) => (
+      {/* ── MAIN ── */}
+      <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
+        {/* LEFT PANEL */}
+        <div className="w-full lg:w-[420px] xl:w-[460px] shrink-0 flex flex-col border-b lg:border-b-0 lg:border-r border-white/[0.06] h-[52%] lg:h-full">
+          {/* Tabs */}
+          <div className="shrink-0 flex border-b border-white/[0.06]">
+            {[
+              { id: "editor", label: "Code Editor", icon: Code2 },
+              { id: "guide", label: "How to Use", icon: Sparkles },
+              { id: "assets", label: "Assets", icon: ImageIcon },
+            ].map(({ id, label, icon: Icon }) => (
               <button
-                key={p}
-                onClick={() => setProvider(p)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  provider === p
-                    ? "bg-teal-600 text-white"
-                    : "bg-gray-800 text-gray-400 hover:text-gray-200"
+                key={id}
+                onClick={() => setActiveTab(id as any)}
+                className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${
+                  activeTab === id
+                    ? "border-teal-400 text-white"
+                    : "border-transparent text-white/35 hover:text-white/60"
                 }`}
               >
-                {p === "gemini" ? "Gemini" : "OpenRouter"}
+                <Icon className="w-3 h-3" />
+                {label}
               </button>
             ))}
           </div>
 
-          {/* Gemini panel */}
-          {provider === "gemini" && (
-            <div className="space-y-2">
-              <p className="text-xs text-gray-500">
-                Free tier — 1,500 requests/day.{" "}
-                <a
-                  href="https://aistudio.google.com/app/apikey"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-teal-500 hover:text-teal-400 underline"
-                >
-                  Get key at aistudio.google.com
-                </a>
-              </p>
-              <div className="flex items-center gap-2">
-                <div className="relative grow">
-                  <Input
-                    type={showGemini ? "text" : "password"}
-                    placeholder="AIza..."
-                    value={geminiInput}
-                    onChange={(e) => setGeminiInput(e.target.value)}
-                    className="bg-gray-800 border-gray-700 focus:border-teal-500 text-xs text-gray-300 placeholder-gray-600 pr-8 h-9 rounded-lg"
-                  />
+          {/* ── EDITOR TAB ── */}
+          {activeTab === "editor" && (
+            <div className="flex flex-col flex-1 min-h-0">
+              {/* Editor toolbar */}
+              <div className="shrink-0 flex items-center justify-between px-3 py-1.5 border-b border-white/[0.04] bg-black/20">
+                <span className="text-[10px] font-mono text-white/20">
+                  MyComposition.jsx
+                </span>
+                <div className="flex items-center gap-0.5">
                   <button
-                    type="button"
-                    onClick={() => setShowGemini((v) => !v)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                    onClick={() => {
+                      setShowSearch(!showSearch);
+                      if (!showSearch) {
+                        setTimeout(
+                          () => document.getElementById("searchInput")?.focus(),
+                          50,
+                        );
+                      }
+                    }}
+                    title="Search in code"
+                    className={`p-1.5 rounded transition-colors ${showSearch ? "bg-white/10 text-white" : "text-white/20 hover:text-white/50 hover:bg-white/5"}`}
                   >
-                    {showGemini ? (
-                      <EyeOff className="h-3.5 w-3.5" />
+                    <Search className="w-3 h-3" />
+                  </button>
+                  <button
+                    onClick={resetCode}
+                    title="Reset to example"
+                    className="p-1.5 rounded text-white/20 hover:text-white/50 hover:bg-white/5 transition-colors"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                  </button>
+                  <button
+                    onClick={copyCode}
+                    title="Copy code"
+                    className="p-1.5 rounded text-white/20 hover:text-white/50 hover:bg-white/5 transition-colors"
+                  >
+                    {copied ? (
+                      <Check className="w-3 h-3 text-teal-400" />
                     ) : (
-                      <Eye className="h-3.5 w-3.5" />
+                      <Copy className="w-3 h-3" />
                     )}
                   </button>
                 </div>
-                <Button
-                  onClick={() => {
-                    if (!geminiInput.trim()) return;
-                    onSaveGemini(geminiInput.trim());
-                    toast.success("Gemini key saved");
-                  }}
-                  disabled={geminiSaved || !geminiInput.trim()}
-                  size="sm"
-                  className="h-9 px-3 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs shrink-0 gap-1.5"
-                >
-                  {geminiSaved ? (
-                    <>
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      Saved
-                    </>
-                  ) : (
-                    "Save"
+              </div>
+
+              {/* Mini Search Bar */}
+              {showSearch && (
+                <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-white/[0.02] border-b border-white/[0.04]">
+                  <Search className="w-3 h-3 text-teal-400/50" />
+                  <input
+                    id="searchInput"
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSearch(e);
+                      if (e.key === "Escape") setShowSearch(false);
+                    }}
+                    placeholder="Search code... (Press Enter for next)"
+                    className="bg-transparent border-none outline-none text-[11px] text-white/80 w-full placeholder:text-white/20 font-mono"
+                  />
+                  {searchQuery && (
+                    <span className="text-[9px] text-white/30 whitespace-nowrap">
+                      Enter to find next
+                    </span>
                   )}
-                </Button>
+                </div>
+              )}
+
+              {/* Textarea */}
+              <div className="flex-1 relative min-h-0">
+                <textarea
+                  ref={textareaRef}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  spellCheck={false}
+                  placeholder="Paste your Remotion code from the GPT here..."
+                  className="absolute inset-0 w-full h-full bg-transparent resize-none font-mono text-[11.5px] leading-relaxed text-teal-300/80 p-4 focus:outline-none placeholder:text-white/10"
+                  style={{ tabSize: 2, caretColor: "#14b8a6" }}
+                />
+              </div>
+
+              {/* Error */}
+              {error && (
+                <div className="shrink-0 flex items-start gap-2 px-3 py-2.5 bg-red-500/10 border-t border-red-500/20">
+                  <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                  <p className="text-[10.5px] text-red-400/80 font-mono leading-snug break-all">
+                    {error}
+                  </p>
+                </div>
+              )}
+
+              {/* Footer hint */}
+              <div className="shrink-0 px-3 py-2 border-t border-white/[0.04] bg-black/20">
+                <p className="text-[10px] text-white/20 leading-relaxed">
+                  Get code from the{" "}
+                  <a
+                    href={GPT_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-teal-400/60 hover:text-teal-400 underline underline-offset-2 transition-colors"
+                  >
+                    DeepShark GPT
+                  </a>{" "}
+                  → paste here → press{" "}
+                  <kbd className="px-1 py-0.5 rounded bg-white/10 font-mono text-[9px] text-white/40">
+                    ⌘↵
+                  </kbd>
+                </p>
               </div>
             </div>
           )}
 
-          {/* OpenRouter panel */}
-          {provider === "openrouter" && (
-            <div className="space-y-2">
-              <p className="text-xs text-gray-500">
-                Access 200+ models. Many have free tiers.{" "}
-                <a
-                  href="https://openrouter.ai/keys"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-teal-500 hover:text-teal-400 underline"
-                >
-                  Get key at openrouter.ai
-                </a>
-              </p>
-              <div className="flex items-center gap-2">
-                <div className="relative grow">
-                  <Input
-                    type={showOR ? "text" : "password"}
-                    placeholder="sk-or-..."
-                    value={orInput}
-                    onChange={(e) => setOrInput(e.target.value)}
-                    className="bg-gray-800 border-gray-700 focus:border-teal-500 text-xs text-gray-300 placeholder-gray-600 pr-8 h-9 rounded-lg"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowOR((v) => !v)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
-                  >
-                    {showOR ? (
-                      <EyeOff className="h-3.5 w-3.5" />
-                    ) : (
-                      <Eye className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                </div>
-                <Button
-                  onClick={() => {
-                    if (!orInput.trim()) return;
-                    onSaveOpenRouter(orInput.trim());
-                    toast.success("OpenRouter key saved");
-                  }}
-                  disabled={orSaved || !orInput.trim()}
-                  size="sm"
-                  className="h-9 px-3 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs shrink-0 gap-1.5"
-                >
-                  {orSaved ? (
-                    <>
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      Saved
-                    </>
-                  ) : (
-                    "Save"
-                  )}
-                </Button>
-              </div>
-
-              {/* Model picker */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 shrink-0">Model:</span>
-                <Select
-                  value={openRouterModel}
-                  onValueChange={setOpenRouterModel}
-                >
-                  <SelectTrigger className="h-9 bg-gray-800 border-gray-700 text-xs text-gray-300 focus:ring-0 focus:border-teal-500 rounded-lg">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-gray-900 border-white/10 text-gray-300 text-xs">
-                    {OPENROUTER_MODELS.map((m) => (
-                      <SelectItem key={m.id} value={m.id} className="text-xs">
-                        {m.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
-
-          <p className="text-xs text-gray-700">
-            Keys are stored only in your browser — never sent to our servers.
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
-export default function MotionGenerationPage() {
-  const [provider, setProvider] = useState<Provider>("gemini");
-  const [geminiKey, setGeminiKey] = useState("");
-  const [openRouterKey, setOpenRouterKey] = useState("");
-  const [openRouterModel, setOpenRouterModel] = useState(
-    OPENROUTER_MODELS[0].id,
-  );
-
-  useEffect(() => {
-    const gk = localStorage.getItem("gemini_api_key");
-    const ok = localStorage.getItem("openrouter_api_key");
-    const om = localStorage.getItem("openrouter_model");
-    if (gk) setGeminiKey(gk);
-    if (ok) setOpenRouterKey(ok);
-    if (om) setOpenRouterModel(om);
-    // Auto-select provider based on which key exists
-    if (ok && !gk) setProvider("openrouter");
-  }, []);
-
-  const saveGeminiKey = (k: string) => {
-    setGeminiKey(k);
-    localStorage.setItem("gemini_api_key", k);
-  };
-
-  const saveOpenRouterKey = (k: string) => {
-    setOpenRouterKey(k);
-    localStorage.setItem("openrouter_api_key", k);
-  };
-
-  const saveOpenRouterModel = (m: string) => {
-    setOpenRouterModel(m);
-    localStorage.setItem("openrouter_model", m);
-  };
-
-  const [prompt, setPrompt] = useState("");
-  const [generatedCode, setGeneratedCode] = useState("");
-  const [showCode, setShowCode] = useState(false);
-  const [DynamicComp, setDynamicComp] = useState<React.ComponentType | null>(
-    null,
-  );
-  const [compError, setCompError] = useState<string | null>(null);
-
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isRendering, setIsRendering] = useState(false);
-  const [renderProgress, setRenderProgress] = useState(0);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const activeKey = provider === "gemini" ? geminiKey : openRouterKey;
-
-  const hasKey = !!activeKey;
-
-  // ── Generate ──
-  const handleGenerate = async () => {
-    if (!hasKey) {
-      toast.error("Add your API key in settings above");
-      return;
-    }
-    if (!prompt.trim()) return;
-
-    setIsGenerating(true);
-    setCompError(null);
-    setVideoUrl(null);
-    setGeneratedCode("");
-    setDynamicComp(null);
-
-    try {
-      let rawCode = "";
-
-      if (provider === "gemini") {
-        rawCode = await callGemini(geminiKey, prompt);
-      } else {
-        rawCode = await callOpenRouter(openRouterKey, openRouterModel, prompt);
-      }
-
-      setGeneratedCode(rawCode);
-      const Comp = evalRemotionComponent(rawCode);
-      setDynamicComp(() => Comp);
-      toast.success("Animation ready!");
-    } catch (err: any) {
-      setCompError(err.message);
-      toast.error(err.message);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  // ── Export ──
-  const handleExport = async () => {
-    if (!DynamicComp) return;
-    setIsRendering(true);
-    setRenderProgress(0);
-    setVideoUrl(null);
-
-    try {
-      const { getBlob } = await renderMediaOnWeb({
-        composition: {
-          id: "motion-export",
-          component: DynamicComp,
-          durationInFrames: 180,
-          fps: 30,
-          width: 1920,
-          height: 1080,
-          defaultProps: {},
-        },
-        inputProps: {},
-        onProgress: ({ progress }) =>
-          setRenderProgress(Math.round(progress * 100)),
-      });
-
-      const blob = await getBlob();
-      setVideoUrl(URL.createObjectURL(blob));
-      toast.success("MP4 ready to download!");
-    } catch (err: any) {
-      toast.error("Export failed: " + err.message);
-    } finally {
-      setIsRendering(false);
-    }
-  };
-
-  const ActiveComp = DynamicComp ?? PlaceholderComp;
-
-  const providerLabel =
-    provider === "gemini"
-      ? "Gemini 2.0 Flash"
-      : (OPENROUTER_MODELS.find((m) => m.id === openRouterModel)?.label ??
-        "OpenRouter");
-
-  return (
-    <div className="flex flex-col h-full bg-black text-gray-300">
-      {/* Preview */}
-      <div className="grow overflow-y-auto p-4 md:p-8 flex flex-col items-center justify-center gap-4">
-        <div className="relative w-full max-w-4xl aspect-video rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-zinc-950">
-          {videoUrl ? (
-            <>
-              <video
-                src={videoUrl}
-                controls
-                autoPlay
-                loop
-                className="w-full h-full object-contain"
-              />
-              <Button
-                onClick={() => {
-                  const a = document.createElement("a");
-                  a.href = videoUrl;
-                  a.download = "motion.mp4";
-                  a.click();
-                }}
-                className="absolute top-3 right-3 bg-teal-500 hover:bg-teal-400 text-black h-9 w-9 rounded-full p-0"
+          {/* ── GUIDE TAB ── */}
+          {activeTab === "guide" && (
+            <div className="flex-1 overflow-y-auto scrollbar-hide p-4 space-y-3">
+              {/* GPT link card */}
+              <a
+                href={GPT_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 p-4 rounded-xl bg-teal-500/10 border border-teal-500/30 hover:bg-teal-500/15 transition-all group"
               >
-                <Download className="h-4 w-4" />
-              </Button>
-            </>
-          ) : (
-            <>
-              <Player
-                component={ActiveComp}
-                inputProps={{}}
-                durationInFrames={180}
-                fps={30}
-                compositionWidth={1920}
-                compositionHeight={1080}
-                style={{ width: "100%", height: "100%" }}
-                controls
-                loop
-                autoPlay
-              />
-
-              {/* Generating overlay */}
-              {isGenerating && (
-                <div className="absolute inset-0 bg-black/75 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-3">
-                  <Loader2 className="h-10 w-10 animate-spin text-teal-400" />
-                  <p className="text-white font-bold text-base">
-                    Writing animation code…
+                <div className="w-9 h-9 rounded-xl bg-teal-500/20 border border-teal-500/30 flex items-center justify-center shrink-0">
+                  <Bot className="w-4 h-4 text-teal-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white">
+                    Remotion DeepShark AI
                   </p>
-                  <p className="text-xs text-gray-400">
-                    {providerLabel} is coding your motion graphic
+                  <p className="text-[11px] text-teal-400/60 truncate">
+                    ChatGPT Custom GPT · Free to use
                   </p>
                 </div>
-              )}
+                <ExternalLink className="w-3.5 h-3.5 text-teal-400/40 group-hover:text-teal-400 transition-colors shrink-0" />
+              </a>
 
-              {/* Rendering overlay */}
-              {isRendering && (
-                <div className="absolute inset-0 bg-black/75 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-3">
-                  <Loader2 className="h-10 w-10 animate-spin text-white" />
-                  <p className="text-white font-bold text-lg">
-                    {renderProgress}%
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    Rendering in your browser…
-                  </p>
-                  <div className="w-48 h-1 bg-gray-800 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-white rounded-full transition-all duration-200"
-                      style={{ width: `${renderProgress}%` }}
-                    />
+              {/* Steps */}
+              {[
+                {
+                  n: "1",
+                  title: "Open the GPT",
+                  body: "Click the card above to open the Remotion DeepShark AI GPT in ChatGPT.",
+                },
+                {
+                  n: "2",
+                  title: "Describe your animation",
+                  body: "Specify the aspect ratio and duration in your prompt! (e.g. 'Make a 9:16 video for 5 seconds').",
+                },
+                {
+                  n: "3",
+                  title: "Paste & Adjust Settings",
+                  body: "Paste the code, select the matching Aspect Ratio/Duration below the player, and press Run.",
+                },
+              ].map(({ n, title, body }) => (
+                <div
+                  key={n}
+                  className="flex gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]"
+                >
+                  <div className="w-5 h-5 rounded-full bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-[10px] font-bold text-teal-400 shrink-0 mt-0.5">
+                    {n}
                   </div>
-                </div>
-              )}
-
-              {/* Error badge */}
-              {compError && (
-                <div className="absolute bottom-3 left-3 right-3 bg-red-950/90 border border-red-500/30 rounded-xl p-3 flex items-start gap-2 text-xs text-red-300">
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-400" />
                   <div>
-                    <p className="font-semibold mb-0.5">
-                      Code error — try regenerating
+                    <p className="text-xs font-semibold text-white mb-0.5">
+                      {title}
                     </p>
-                    <p className="opacity-70 font-mono">{compError}</p>
+                    <p className="text-[11px] text-white/40 leading-relaxed">
+                      {body}
+                    </p>
                   </div>
                 </div>
+              ))}
+
+              {/* Example prompts */}
+              <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-3">
+                <p className="text-[10px] font-semibold text-white/30 uppercase tracking-widest mb-2.5">
+                  Example prompts to try
+                </p>
+                <div className="space-y-1.5">
+                  {EXAMPLE_PROMPTS.map((p, i) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        navigator.clipboard.writeText(p);
+                        toast.success("Copied!");
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-white/5 transition-colors text-left group"
+                    >
+                      <ChevronRight className="w-3 h-3 text-white/15 group-hover:text-teal-400 shrink-0 transition-colors" />
+                      <span className="text-[11px] text-white/40 group-hover:text-white/60 transition-colors flex-1">
+                        {p}
+                      </span>
+                      <Copy className="w-2.5 h-2.5 text-white/0 group-hover:text-white/25 shrink-0 transition-colors" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Available globals */}
+              <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-3">
+                <p className="text-[10px] font-semibold text-white/30 uppercase tracking-widest mb-2.5">
+                  Available in code
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    "AbsoluteFill",
+                    "useCurrentFrame",
+                    "useVideoConfig",
+                    "spring",
+                    "interpolate",
+                    "Easing",
+                    "Sequence",
+                    "Series",
+                    "Loop",
+                    "random",
+                    "Audio",
+                    "Img",
+                    "Video",
+                  ].map((g) => (
+                    <span
+                      key={g}
+                      className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-black/40 border border-white/[0.06] text-teal-400/60"
+                    >
+                      {g}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── ASSETS TAB ── */}
+          {activeTab === "assets" && (
+            <div className="flex-1 overflow-y-auto scrollbar-hide p-4 space-y-4">
+              <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-6 text-center shadow-inner">
+                <UploadCloud className="w-8 h-8 text-teal-400/60 mx-auto mb-2" />
+                <p className="text-sm font-semibold text-white mb-1">
+                  Upload Local Media
+                </p>
+                <p className="text-[11px] text-white/40 mb-4 max-w-xs mx-auto">
+                  Upload images or videos directly from your PC. We will
+                  automatically rename them so you can use them easily in your
+                  code!
+                </p>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                  multiple
+                  accept="image/*,video/*"
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-4 py-2 bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs font-semibold rounded-lg hover:bg-teal-500/30 transition-colors active:scale-95"
+                >
+                  Browse Files
+                </button>
+              </div>
+
+              {assets.length > 0 && (
+                <div className="grid grid-cols-2 gap-3">
+                  {assets.map((asset) => (
+                    <div
+                      key={asset.id}
+                      className="group relative rounded-lg border border-white/[0.06] bg-black/40 overflow-hidden flex flex-col"
+                    >
+                      {/* Preview Box */}
+                      <div className="aspect-video bg-black/50 flex items-center justify-center overflow-hidden">
+                        {asset.type === "image" ? (
+                          <img
+                            src={asset.url}
+                            alt={asset.name}
+                            className="w-full h-full object-cover opacity-80"
+                          />
+                        ) : (
+                          <video
+                            src={asset.url}
+                            className="w-full h-full object-cover opacity-80"
+                          />
+                        )}
+                      </div>
+
+                      {/* Action Bar */}
+                      <div className="flex items-center justify-between p-2 bg-white/[0.03]">
+                        <p className="text-[10px] font-mono text-teal-300 truncate pr-2">
+                          /{asset.name}
+                        </p>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(`/${asset.name}`);
+                              toast.success("Copied to clipboard!");
+                            }}
+                            className="p-1.5 rounded hover:bg-white/10 text-white/40 hover:text-white transition-colors"
+                            title="Copy Name"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => removeAsset(asset.id)}
+                            className="p-1.5 rounded hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
-            </>
+            </div>
           )}
         </div>
 
-        {/* Generated code viewer */}
-        {generatedCode && (
-          <div className="w-full max-w-4xl">
-            <button
-              onClick={() => setShowCode((v) => !v)}
-              className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-400 transition-colors"
-            >
-              {showCode ? (
-                <ChevronDown className="h-3 w-3" />
-              ) : (
-                <ChevronRight className="h-3 w-3" />
-              )}
-              {showCode ? "Hide" : "View"} generated code
-            </button>
-            {showCode && (
-              <pre className="mt-2 p-4 bg-gray-900 rounded-xl text-xs text-emerald-400 overflow-x-auto max-h-48 overflow-y-auto border border-white/5 font-mono">
-                {generatedCode}
-              </pre>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Bottom controls */}
-      <div className="w-full px-4 pb-6 pt-3 border-t border-white/5">
-        {/* Provider / API key settings */}
-        <ProviderPanel
-          provider={provider}
-          setProvider={setProvider}
-          geminiKey={geminiKey}
-          onSaveGemini={saveGeminiKey}
-          openRouterKey={openRouterKey}
-          onSaveOpenRouter={saveOpenRouterKey}
-          openRouterModel={openRouterModel}
-          setOpenRouterModel={saveOpenRouterModel}
-        />
-
-        {/* Active provider badge */}
-        {hasKey && (
-          <div className="max-w-3xl mx-auto mb-2 flex items-center gap-1.5">
-            <div className="h-1.5 w-1.5 rounded-full bg-teal-400" />
-            <span className="text-xs text-gray-500">Using {providerLabel}</span>
-          </div>
-        )}
-
-        {/* Prompt row */}
-        <div className="max-w-3xl mx-auto flex items-end gap-2">
-          <Textarea
-            ref={textareaRef}
-            placeholder={
-              !hasKey
-                ? "Open API settings above and add your key first…"
-                : 'Try "neon countdown 10 to 0", "particle explosion", "glitch logo reveal", "matrix rain"…'
-            }
-            value={prompt}
-            onChange={(e) => {
-              setPrompt(e.target.value);
-              if (textareaRef.current) {
-                textareaRef.current.style.height = "auto";
-                textareaRef.current.style.height = `${Math.min(
-                  textareaRef.current.scrollHeight,
-                  120,
-                )}px`;
-              }
+        {/* RIGHT: Player */}
+        <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-8 relative h-[48%] lg:h-full overflow-hidden">
+          {/* Subtle grid bg */}
+          <div
+            className="absolute inset-0 opacity-20"
+            style={{
+              backgroundImage:
+                "repeating-conic-gradient(rgba(255,255,255,.04) 0% 25%, transparent 0% 50%)",
+              backgroundSize: "20px 20px",
             }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleGenerate();
-              }
-            }}
-            rows={1}
-            disabled={isGenerating || isRendering || !hasKey}
-            className="grow bg-gray-900 border-gray-700 focus:border-teal-500 focus:ring-0 rounded-xl resize-none text-sm text-gray-200 placeholder-gray-600 min-h-12 max-h-28"
           />
 
-          <Button
-            onClick={handleGenerate}
-            disabled={isGenerating || isRendering || !prompt.trim() || !hasKey}
-            className="h-12 px-5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold shrink-0 gap-2"
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Coding…
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4" />
-                Generate
-              </>
-            )}
-          </Button>
+          {compiled ? (
+            <div className="relative z-10 w-full max-w-2xl flex flex-col gap-2">
+              {/* Player */}
+              <div className="w-full aspect-video rounded-2xl overflow-hidden border border-white/10 bg-black shadow-2xl flex items-center justify-center">
+                <div
+                  ref={containerRef} // 🌟 MOVED HERE: Now it captures the exact aspect ratio without black bars!
+                  className="relative flex items-center justify-center bg-black overflow-hidden"
+                  style={{
+                    aspectRatio: `${dimensions.w} / ${dimensions.h}`,
+                    maxHeight: "100%",
+                    maxWidth: "100%",
+                    height: "100%",
+                  }}
+                >
+                  <Player
+                    ref={playerRef}
+                    component={compiled}
+                    durationInFrames={DURATION_FRAMES}
+                    fps={FPS}
+                    compositionWidth={dimensions.w}
+                    compositionHeight={dimensions.h}
+                    style={{ width: "100%", height: "100%" }}
+                    controls={!exporting} // 🌟 NEW: Completely removes the timeline/play buttons when exporting!
+                    loop
+                    autoPlay
+                  />
+                </div>
+              </div>
 
-          {DynamicComp && !videoUrl && !isGenerating && (
-            <Button
-              onClick={handleExport}
-              disabled={isRendering}
-              className="h-12 px-5 rounded-xl bg-white text-black hover:bg-gray-100 font-semibold shrink-0 gap-2"
-            >
-              <Download className="h-4 w-4" />
-              Export
-            </Button>
+              {/* Meta row WITH INTERACTIVE CONTROLS */}
+              <div className="flex items-center justify-between px-1 mt-1">
+                <div className="flex items-center gap-2 text-[11px] text-white/50 font-mono">
+                  {/* Custom Aspect Ratio Selector */}
+                  <div
+                    className="relative"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      onClick={() =>
+                        setOpenMenu(openMenu === "ratio" ? null : "ratio")
+                      }
+                      className="flex items-center gap-1.5 bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.1] hover:border-white/[0.2] text-white/80 py-1 px-2.5 rounded-lg transition-all outline-none"
+                    >
+                      <span className="text-[11px] font-medium">
+                        {ratio === "16:9"
+                          ? "16:9 Landscape"
+                          : ratio === "9:16"
+                            ? "9:16 Vertical"
+                            : "1:1 Square"}
+                      </span>
+                      <ChevronDown
+                        className={`w-3 h-3 text-white/40 transition-transform duration-200 ${openMenu === "ratio" ? "rotate-180" : ""}`}
+                      />
+                    </button>
+
+                    {openMenu === "ratio" && (
+                      <div className="absolute bottom-full left-0 mb-1.5 w-36 bg-gray-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 py-1 animate-in fade-in zoom-in-95">
+                        {[
+                          { v: "16:9", l: "16:9 Landscape" },
+                          { v: "9:16", l: "9:16 Vertical" },
+                          { v: "1:1", l: "1:1 Square" },
+                        ].map((opt) => (
+                          <button
+                            key={opt.v}
+                            onClick={() => {
+                              setRatio(opt.v as any);
+                              setOpenMenu(null);
+                            }}
+                            className={`w-full text-left px-3 py-1.5 text-[11px] transition-colors ${ratio === opt.v ? "bg-teal-500/20 text-teal-300 font-medium" : "text-white/60 hover:bg-white/10 hover:text-white"}`}
+                          >
+                            {opt.l}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <span className="opacity-40">·</span>
+                  <span className="font-medium text-white/70">{FPS}fps</span>
+                  <span className="opacity-40">·</span>
+
+                  {/* Custom Duration Selector */}
+                  <div
+                    className="relative"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      onClick={() =>
+                        setOpenMenu(openMenu === "duration" ? null : "duration")
+                      }
+                      className="flex items-center gap-1.5 bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.1] hover:border-white/[0.2] text-white/80 py-1 px-2.5 rounded-lg transition-all outline-none"
+                    >
+                      <span className="text-[11px] font-medium">
+                        {durationSec}s
+                      </span>
+                      <ChevronDown
+                        className={`w-3 h-3 text-white/40 transition-transform duration-200 ${openMenu === "duration" ? "rotate-180" : ""}`}
+                      />
+                    </button>
+
+                    {openMenu === "duration" && (
+                      <div className="absolute bottom-full left-0 mb-1.5 w-20 bg-gray-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 py-1 animate-in fade-in zoom-in-95">
+                        {[3, 5, 10, 15].map((opt) => (
+                          <button
+                            key={opt}
+                            onClick={() => {
+                              setDurationSec(opt);
+                              setOpenMenu(null);
+                            }}
+                            className={`w-full text-left px-3 py-1.5 text-[11px] transition-colors ${durationSec === opt ? "bg-teal-500/20 text-teal-300 font-medium" : "text-white/60 hover:bg-white/10 hover:text-white"}`}
+                          >
+                            {opt}s
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => playerRef.current?.seekTo(0)}
+                    className="text-[10px] text-white/25 hover:text-white/50 transition-colors px-2 py-1 rounded hover:bg-white/5"
+                  >
+                    Restart
+                  </button>
+                  <button
+                    onClick={copyCode}
+                    className="flex items-center gap-1 text-[10px] text-white/25 hover:text-white/50 transition-colors px-2 py-1 rounded hover:bg-white/5"
+                  >
+                    {copied ? (
+                      <Check className="w-2.5 h-2.5 text-teal-400" />
+                    ) : (
+                      <Copy className="w-2.5 h-2.5" />
+                    )}
+                    Copy
+                  </button>
+
+                  {/* ── EXPORT BUTTON ── */}
+                  <button
+                    onClick={handleExport}
+                    disabled={exporting}
+                    title="Export animation as WebM video"
+                    className="flex items-center gap-1 text-[10px] font-medium text-teal-400/70 hover:text-teal-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors px-2 py-1 rounded hover:bg-teal-500/10 border border-transparent hover:border-teal-500/20"
+                  >
+                    {exporting ? (
+                      <>
+                        <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                        {exportProgress}%
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-2.5 h-2.5" />
+                        Export
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Empty state */
+            <div className="relative z-10 flex flex-col items-center gap-4 text-center px-4 max-w-xs">
+              <div className="w-14 h-14 rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center">
+                <Play className="w-5 h-5 text-white/15 ml-0.5" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-white/25 mb-1.5">
+                  No animation yet
+                </p>
+                <p className="text-xs text-white/15 leading-relaxed">
+                  Open the GPT, describe your animation, paste the code, and hit
+                  Run
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center gap-2">
+                <a
+                  href={GPT_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs font-medium px-4 py-2 rounded-xl bg-teal-500/15 border border-teal-500/30 text-teal-400 hover:bg-teal-500/25 transition-all"
+                >
+                  <Bot className="w-3.5 h-3.5" /> Open GPT
+                </a>
+                <button
+                  onClick={() => {
+                    resetCode();
+                    setTimeout(handleRun, 50);
+                  }}
+                  className="text-xs text-white/20 hover:text-white/40 transition-colors underline underline-offset-2"
+                >
+                  Load example
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Error overlay */}
+          {error && (
+            <div className="absolute bottom-4 left-4 right-4 z-20 flex items-start gap-2.5 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl backdrop-blur-sm">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-red-400 mb-0.5">
+                  Compilation error
+                </p>
+                <p className="text-[10.5px] text-red-300/60 font-mono leading-snug break-all">
+                  {error}
+                </p>
+              </div>
+            </div>
           )}
         </div>
       </div>

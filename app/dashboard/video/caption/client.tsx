@@ -1233,7 +1233,7 @@ export default function VideoCaptionerPage() {
         }}
       />
 
-      <div className="flex flex-col lg:flex-row w-full h-[calc(100vh-64px)] text-gray-200 overflow-hidden bg-transparent">
+      <div className="no-sidebar-swipe flex flex-col lg:flex-row w-full h-[calc(100vh-64px)] text-gray-200 overflow-hidden bg-transparent">
         <div className="w-full h-[45%] lg:h-full lg:flex-1 flex flex-col items-center justify-center relative border-b border-white/5 lg:border-b-0 shrink-0">
           <div
             className="relative h-full max-h-[40vh] lg:max-h-[65vh] max-w-full bg-black rounded-2xl lg:rounded-4xl border border-white/10 shadow-2xl overflow-hidden group"

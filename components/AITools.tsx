@@ -15,7 +15,7 @@ import {
 const staticTools = [
   {
     id: 1,
-    name: "Magic eraser",
+    name: "Image eraser",
     description: "Remove any object from image",
     image_url: "/tools/magic_eraser.webm",
     link: "/dashboard/image/eraser",
@@ -25,16 +25,17 @@ const staticTools = [
     id: 2,
     name: "Caption Generator",
     description: "Generate caption for free",
-    image_url: "/tools/caption.webm",
+    image_url: "/tools/caption-tool.webm",
     link: "/dashboard/video/caption",
     badge: "Free",
   },
   {
     id: 3,
-    name: "Frame Extractor",
-    description: "Extract Frames from video.",
-    image_url: "/tools/Fame-extarctor-tool.webm",
-    link: "/dashboard/video/frame-extractor",
+    name: "Motion Generator",
+    description:
+      "Render beautiful 3D motion graphics instantly from text using AI.",
+    imageUrl: "/tools/motions-tool.webm",
+    link: "/dashboard/video/motions",
     badge: "Free",
   },
   {
@@ -47,10 +48,11 @@ const staticTools = [
   },
   {
     id: 5,
-    name: "Transcribe ",
-    description: "Transcribe Any audio or video file",
-    image_url: "/tools/transciber.webm",
-    link: "/dashboard/text/transcribe",
+    name: "Video Eraser",
+    description:
+      "Remove watermarks, logos, text, and unwanted objects from videos.",
+    imageUrl: "/tools/video-eraser.webm",
+    link: "/dashboard/video/eraser",
     badge: "Free",
   },
   {
@@ -63,10 +65,11 @@ const staticTools = [
   },
   {
     id: 7,
-    name: "Image converter",
-    description: "convert any image and compress",
-    imageUrl: "/tools/imagec.webm",
-    link: "/dashboard/image/converter",
+    name: "Auto Zoom Video",
+    description:
+      "Automatically add dynamic zoom cuts and camera movements to your videos.",
+    imageUrl: "/tools/Auto-zoom.webm",
+    link: "/dashboard/video/auto-zoom",
     badge: "Free",
   },
   {
