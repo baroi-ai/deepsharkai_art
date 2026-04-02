@@ -5,6 +5,7 @@ import { Providers } from "@/components/providers";
 import { Toaster } from "sonner";
 import { AuthModal } from "@/components/AuthModal"; // ✅ Import AuthModal
 import { Viewport } from "next";
+import Script from "next/script";
 
 export const viewport: Viewport = {
   themeColor: "#020617", // slate-950
@@ -34,6 +35,11 @@ export default function RootLayout({
         <Providers>
           {children}
           <Toaster position="top-center" theme="dark" richColors />
+          <Script
+            src="https://cloud.umami.is/script.js"
+            data-website-id="e256fc72-605e-438d-8e45-5ebf1ef3ab94"
+            strategy="afterInteractive"
+          />
 
           {/* ✅ GLOBAL LISTENER: Handles ?openLogin=true */}
           {/* Hidden, only works via URL params */}
