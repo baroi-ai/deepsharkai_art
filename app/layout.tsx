@@ -19,7 +19,6 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "DeepShark AI | Extract Layer, Edit & Upscale Images",
-  manifest: "/manifest.json",
   description:
     "The ultimate AI Image Studio. Extract image layers, edit, Free caption and upscale to 4K using elite AI models. Turn flat images into editable 3D layers instantly",
 };
