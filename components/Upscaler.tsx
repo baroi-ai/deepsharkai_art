@@ -135,7 +135,7 @@ export default function UpscalerInteractiveHero() {
         {/* BOTTOM LAYER: BEFORE IMAGE (Low Quality) */}
         {/* 👈 PUT YOUR LOW-RES "BEFORE" IMAGE PATH HERE */}
         <img
-          src="/tools/before.jpg"
+          src="/tools/before.webp"
           alt="Before Upscale"
           className="absolute inset-0 w-full h-full object-cover pointer-events-none"
           style={{ imageRendering: "pixelated" }}
@@ -150,7 +150,7 @@ export default function UpscalerInteractiveHero() {
         >
           {/* 👈 PUT YOUR HIGH-RES "AFTER" IMAGE PATH HERE */}
           <img
-            src="/tools/after.png"
+            src="/tools/after.webp"
             alt="After Upscale"
             className="absolute inset-0 w-full h-full object-cover pointer-events-none"
           />

@@ -148,7 +148,7 @@ export default function BgRemoverInteractiveHero() {
         >
           {/* 👈 PUT YOUR TRANSPARENT "AFTER" IMAGE PATH HERE */}
           <img
-            src="/tools/removed.png"
+            src="/tools/removed.webp"
             alt="Transparent Background"
             className="absolute inset-0 w-full h-full object-cover pointer-events-none"
           />
@@ -169,7 +169,7 @@ export default function BgRemoverInteractiveHero() {
         >
           {/* 👈 PUT YOUR ORIGINAL "BEFORE" IMAGE PATH HERE */}
           <img
-            src="/tools/bg.png"
+            src="/tools/bg.webp"
             alt="Original Photo"
             className="absolute inset-0 w-full h-full object-cover pointer-events-none"
           />

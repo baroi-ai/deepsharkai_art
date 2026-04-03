@@ -1,0 +1,182 @@
+[
+  {
+    "id": 1,
+    "name": "Flux Klein 9B",
+    "type": "Image",
+    "icon": "/icons/flux.webp",
+    "description": "State of the art image model.",
+    "rating": 4.5,
+    "link": "/dashboard/image/generator",
+    "badge": "SOTA"
+  },
+  {
+    "id": 2,
+    "name": "Topaz Upscaler",
+    "type": "Image",
+    "icon": "/icons/Topaz-ai.webp",
+    "description": "Image upscaler",
+    "rating": 4.9,
+    "link": "/dashboard/image/upscaler",
+    "badge": null
+  },
+  {
+    "id": 4,
+    "name": "Runway Gen-3",
+    "type": "Video",
+    "icon": "/icons/runway.webp",
+    "description": "Realistic video synthesis",
+    "rating": 4.7,
+    "link": "/dashboard/coming-soon",
+    "badge": "Soon..."
+  },
+  {
+    "id": 5,
+    "name": "Luma",
+    "type": "Image",
+    "icon": "/icons/luma.webp",
+    "description": "High quality Image generation.",
+    "rating": 4.2,
+    "link": "/dashboard/image/generator",
+    "badge": null
+  },
+  {
+    "id": 6,
+    "name": "Minimax Image",
+    "type": "Image",
+    "icon": "/icons/minimax.webp",
+    "description": "Fast Image generation model.",
+    "rating": 4.5,
+    "link": "/dashboard/image/generator",
+    "badge": "Fast"
+  },
+  {
+    "id": 7,
+    "name": "Veo 3.1",
+    "type": "Video",
+    "icon": "/icons/google.webp",
+    "description": "Google's latest video model.",
+    "rating": 4.9,
+    "link": "/dashboard/image-generation",
+    "badge": "Soon..."
+  },
+  {
+    "id": 8,
+    "name": "Recraft",
+    "type": "Image",
+    "icon": "/icons/recraft.webp",
+    "description": "Vector and raster design.",
+    "rating": 4.4,
+    "link": "/dashboard/image-generation",
+    "badge": null
+  },
+  {
+    "id": 9,
+    "name": "Qwen layer",
+    "type": "Image",
+    "icon": "/icons/wan.webp",
+    "description": "Decompose any image",
+    "rating": 4.5,
+    "link": "/dashboard/image/decompose",
+    "badge": "HoT"
+  },
+  {
+    "id": 10,
+    "name": "Nano Banana",
+    "type": "Image",
+    "icon": "/icons/nano-banna.webp",
+    "description": "Google best image generation model",
+    "rating": 4.5,
+    "link": "/dashboard/image/generator",
+    "badge": null
+  },
+  {
+    "id": 11,
+    "name": "Wan Angel",
+    "type": "Image",
+    "icon": "/icons/wan.webp",
+    "description": "Change Angel of any image",
+    "rating": 5,
+    "link": "/dashboard/image/angel",
+    "badge": "New"
+  },
+  {
+    "id": 12,
+    "name": "Ideogram 01",
+    "type": "Image",
+    "icon": "/icons/ideogram.webp",
+    "description": "AI image generation model",
+    "rating": 4.3,
+    "link": "/dashboard/image/generator",
+    "badge": null
+  },
+  {
+    "id": 14,
+    "name": "SeaDream 1.5",
+    "type": "Image",
+    "icon": "/icons/dreminia.webp",
+    "description": "High quality video generation.",
+    "rating": 4.5,
+    "link": "/dashboard/image/generator",
+    "badge": null
+  },
+  {
+    "id": 15,
+    "name": "Hailuo 2",
+    "type": "Video",
+    "icon": "/icons/hailuo.webp",
+    "description": "Cinematic AI video model.",
+    "rating": 5,
+    "link": "/dashboard/coming-soon",
+    "badge": "Soon..."
+  },
+  {
+    "id": 16,
+    "name": "GPT Image 1.5",
+    "type": "Image",
+    "icon": "/icons/openai.webp",
+    "description": "Open AI Best image model",
+    "rating": 4.5,
+    "link": "/dashboard/image/generator",
+    "badge": null
+  },
+  {
+    "id": 17,
+    "name": "Z Image",
+    "type": "Image",
+    "icon": "/icons/z-image.webp",
+    "description": "Best Open source image gen model",
+    "rating": 4.6,
+    "link": "/dashboard/image/generator",
+    "badge": null
+  },
+  {
+    "id": 18,
+    "name": "Clarity Upscaler",
+    "type": "Image",
+    "icon": "/icons/clarityai.webp",
+    "description": "One of the best image upscaler",
+    "rating": 4.2,
+    "link": "/dashboard/image/upscaler",
+    "badge": null
+  },
+  {
+    "id": 19,
+    "name": "Shark Skin Enhancer",
+    "type": "Image",
+    "icon": "/logo.webp",
+    "description": "Best Skin Enhancer in market",
+    "rating": 4.3,
+    "link": "/dashboard/image/skin-enhancer",
+    "badge": null
+  },
+  {
+    "id": 20,
+    "name": "Shark Upscaler",
+    "type": "Image",
+    "icon": "/logo.webp",
+    "description": "One of the best image upscalers in the market",
+    "rating": 4.7,
+    "link": "/dashboard/image/upscaler",
+    "badge": "New"
+  }
+]

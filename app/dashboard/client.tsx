@@ -77,7 +77,12 @@ const ToolCard = ({ tool, router }: { tool: any; router: any }) => {
             playsInline
             className="absolute inset-0 w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-300"
           >
-            {isVideoLoaded && <source src={imageUrl} type="video/mp4" />}
+            {isVideoLoaded && (
+              <source
+                src={imageUrl}
+                type={imageUrl.endsWith(".webm") ? "video/webm" : "video/mp4"}
+              />
+            )}
           </video>
         ) : (
           <Image

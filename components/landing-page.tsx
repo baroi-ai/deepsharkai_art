@@ -37,13 +37,11 @@ const LandingPage = () => {
       <Navbar />
       <Hero />
 
-      {/* ✅ AI Tools Section (DB Connected) */}
       <AITools />
 
-      <MotionGeneratorHero />
-
-      {/* Layer Explosion Hero */}
       <LayerExplosionHero />
+
+      <MotionGeneratorHero />
 
       <CaptionGeneratorInteractiveHero />
 

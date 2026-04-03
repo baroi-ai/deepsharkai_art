@@ -1,76 +1,70 @@
 "use server";
 
-import { db } from "../db"; // Check your db path
-import { aiModels, aiTools, carousels } from "../db/schema";
-import { eq, desc, asc, like, or, sql } from "drizzle-orm";
+import toolsData from "@/app/data/ai_tools.json";
+import slidesData from "@/app/data/carousels.json";
+import modelsData from "@/app/data/ai_models.json";
+
+const PAGE_SIZE_TOOLS = 10;
+const PAGE_SIZE_MODELS = 12;
 
 export async function getDashboardContent() {
   try {
-    // 1. Fetch Slides (Carousels)
-    const slidesData = await db
-      .select()
-      .from(carousels)
-      .where(eq(carousels.isActive, true))
-      .orderBy(asc(carousels.order)); // Maintain slide order
+    const formattedSlides = slidesData
+      .filter((s: any) => s.is_active === true)
+      .map((s: any) => ({
+        id: s.id,
+        title: s.title,
+        description: s.description,
+        imageUrl: s.image_url,
+        ctaText: s.cta_text,
+        ctaLink: s.cta_link,
+        order: s.order,
+      }))
+      .sort((a, b) => a.order - b.order);
 
-    // 2. Fetch Tools
-    const toolsData = await db.select().from(aiTools).orderBy(desc(aiTools.id));
+    // .reverse() ensures the tool you just added to the bottom of the JSON shows up first
+    const formattedTools = [...toolsData].reverse().map((t: any) => ({
+      ...t,
+      imageUrl: t.image_url,
+    }));
 
-    // 3. Fetch Models
-    const modelsData = await db
-      .select()
-      .from(aiModels)
-      .orderBy(desc(aiModels.id));
+    const formattedModels = [...modelsData].reverse();
 
     return {
-      slides: slidesData,
-      tools: toolsData,
-      models: modelsData,
+      slides: formattedSlides,
+      tools: formattedTools.slice(0, 18),
+      models: formattedModels.slice(0, 8),
     };
   } catch (error) {
-    console.error("Failed to fetch dashboard content:", error);
+    console.error("Local fetch failed:", error);
     return { slides: [], tools: [], models: [] };
   }
 }
 
-// --- 2. NEW PAGINATION FUNCTION (For Tools Page) ---
-const PAGE_SIZE = 10; // Number of tools per page
-
 export async function getToolsPaginated(page: number = 1, search: string = "") {
   try {
-    const offset = (page - 1) * PAGE_SIZE;
+    const term = search.toLowerCase();
 
-    // Build Search Filter
-    // If search exists, filter by name/description/badge.
-    // If empty, pass undefined (Drizzle ignores it, showing all tools).
-    const searchFilter = search
-      ? or(
-          like(aiTools.name, `%${search}%`),
-          like(aiTools.description, `%${search}%`),
-          like(aiTools.badge, `%${search}%`),
-        )
-      : undefined;
+    // Reversing first so the "latest" logic applies to search results too
+    const filtered = [...toolsData]
+      .reverse()
+      .filter(
+        (tool: any) =>
+          tool.name.toLowerCase().includes(term) ||
+          tool.description.toLowerCase().includes(term) ||
+          (tool.badge && tool.badge.toLowerCase().includes(term)),
+      )
+      .map((t: any) => ({
+        ...t,
+        imageUrl: t.image_url,
+      }));
 
-    // 1. Fetch Tools
-    const tools = await db
-      .select()
-      .from(aiTools)
-      .where(searchFilter)
-      .limit(PAGE_SIZE)
-      .offset(offset)
-      .orderBy(desc(aiTools.id));
-
-    // 2. Get Total Count (for pagination math)
-    const [countResult] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(aiTools)
-      .where(searchFilter);
-
-    const totalItems = Number(countResult.count);
-    const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+    const totalItems = filtered.length;
+    const totalPages = Math.ceil(totalItems / PAGE_SIZE_TOOLS);
+    const offset = (page - 1) * PAGE_SIZE_TOOLS;
 
     return {
-      tools,
+      tools: filtered.slice(offset, offset + PAGE_SIZE_TOOLS),
       pagination: {
         currentPage: page,
         totalPages,
@@ -78,7 +72,6 @@ export async function getToolsPaginated(page: number = 1, search: string = "") {
       },
     };
   } catch (error) {
-    console.error("Error fetching tools:", error);
     return {
       tools: [],
       pagination: { currentPage: 1, totalPages: 1, totalItems: 0 },
@@ -86,53 +79,31 @@ export async function getToolsPaginated(page: number = 1, search: string = "") {
   }
 }
 
-const PAGE_SIZES = 12; // Number of
-// --- 3. NEW PAGINATION FUNCTION (For Models Page) ---
 export async function getModelsPaginated(
   page: number = 1,
   search: string = "",
 ) {
   try {
-    const offset = (page - 1) * PAGE_SIZES;
+    const term = search.toLowerCase();
 
-    // Build Search Filter
-    const searchFilter = search
-      ? or(
-          like(aiModels.name, `%${search}%`),
-          like(aiModels.description, `%${search}%`),
-          like(aiModels.type, `%${search}%`),
-          like(aiModels.badge, `%${search}%`),
-        )
-      : undefined;
+    // Reverse models so newest IDs are on Page 1
+    const filtered = [...modelsData]
+      .reverse()
+      .filter(
+        (model: any) =>
+          model.name.toLowerCase().includes(term) ||
+          model.description.toLowerCase().includes(term),
+      );
 
-    // 1. Fetch Models
-    const models = await db
-      .select()
-      .from(aiModels)
-      .where(searchFilter)
-      .limit(PAGE_SIZES)
-      .offset(offset)
-      .orderBy(desc(aiModels.id));
-
-    // 2. Get Total Count
-    const [countResult] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(aiModels)
-      .where(searchFilter);
-
-    const totalItems = Number(countResult.count);
-    const totalPages = Math.ceil(totalItems / PAGE_SIZES);
+    const totalItems = filtered.length;
+    const totalPages = Math.ceil(totalItems / PAGE_SIZE_MODELS);
+    const offset = (page - 1) * PAGE_SIZE_MODELS;
 
     return {
-      models,
-      pagination: {
-        currentPage: page,
-        totalPages,
-        totalItems,
-      },
+      models: filtered.slice(offset, offset + PAGE_SIZE_MODELS),
+      pagination: { currentPage: page, totalPages, totalItems },
     };
   } catch (error) {
-    console.error("Error fetching models:", error);
     return {
       models: [],
       pagination: { currentPage: 1, totalPages: 1, totalItems: 0 },

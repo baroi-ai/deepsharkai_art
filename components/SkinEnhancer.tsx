@@ -32,7 +32,7 @@ export default function SkinEnhancerInteractiveHero() {
 
             // Smooth "ease-out" math curve
             const easeProgress = 1 - Math.pow(1 - progress, 3);
-            setSliderPos(0 + 53 * easeProgress); // Animate from 0 to 50
+            setSliderPos(0 + 57 * easeProgress); // Animate from 0 to 50
 
             if (progress < 1) {
               animationRef.current = requestAnimationFrame(animateSlider);
@@ -136,7 +136,7 @@ export default function SkinEnhancerInteractiveHero() {
         {/* BOTTOM LAYER: BEFORE IMAGE (Smooth AI Skin) */}
         {/* 👈 PUT YOUR PLASTIC "BEFORE" IMAGE PATH HERE */}
         <img
-          src="/tools/sking.jpeg"
+          src="/tools/sking.webp"
           alt="Before Enhancement"
           className="absolute inset-0 w-full h-full object-cover pointer-events-none"
         />
@@ -150,7 +150,7 @@ export default function SkinEnhancerInteractiveHero() {
         >
           {/* 👈 PUT YOUR TEXTURED "AFTER" IMAGE PATH HERE */}
           <img
-            src="/tools/skin.jpg"
+            src="/tools/skin.webp"
             alt="After Enhancement"
             className="absolute inset-0 w-full h-full object-cover pointer-events-none"
           />

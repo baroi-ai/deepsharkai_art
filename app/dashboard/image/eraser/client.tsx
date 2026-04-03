@@ -293,7 +293,7 @@ const MagicEraserPage = () => {
 
   return (
     <div className="flex flex-col h-full text-gray-300">
-      <div className="grow overflow-hidden bg-gray-900/50 relative flex items-center justify-center">
+      <div className="grow overflow-hidden  relative flex items-center justify-center">
         <div
           ref={containerRef}
           className="w-full h-full overflow-auto flex items-center justify-center p-2 md:p-8"

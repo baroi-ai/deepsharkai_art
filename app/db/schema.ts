@@ -276,3 +276,14 @@ export const voiceGenerationsRelations = relations(
     }),
   }),
 );
+
+// --- BROADCAST NOTIFICATIONS (Global) ---
+export const globalNotifications = pgTable("global_notifications", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  title: text("title").notNull(), // e.g., "70% OFF SALE"
+  message: text("message").notNull(), // e.g., "Get the Pro plan for $5 this week only!"
+  link: text("link"), // e.g., "/dashboard/billing"
+  type: text("type").default("info"), // e.g., "promo", "maintenance", "update"
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});

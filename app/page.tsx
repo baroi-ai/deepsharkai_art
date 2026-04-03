@@ -5,11 +5,15 @@ import LandingPage from "@/components/landing-page";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "DeepShark AI | Extract Layer, Edit & Upscale Images",
+  title: "DeepShark AI | Extract Layer, Motion & Upscale Images",
   description:
-    "The ultimate AI Image Studio. Extract image layers, edit, Free caption and upscale to 4K using elite AI models. Turn flat images into editable 3D layers instantly.",
+    "The ultimate AI Creative Studio. Extract image layers, edit, motion, Free caption and upscale to 4K using elite AI models. Turn flat images into editable 3D layers instantly.",
   keywords: [
     "Image Decomposer",
+    "Free motion generator",
+    "remotion",
+    "free caption generator",
+    "AI Image Upscaler",
     "Extract Image Layers",
     "Split Image into Layers",
     "AI Background Remover",
@@ -28,9 +32,9 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: "https://deepsharkai.art/",
     siteName: "DeepShark AI",
-    title: "DeepShark AI • Layer, Edit & Upscale",
+    title: "DeepShark AI • Layer, Motion & Upscale",
     description:
-      "Extract image layers, edit, and upscale 4K using elite AI models. The ultimate AI studio for creators.",
+      "Extract image layers, edit, motion and upscale 4K using elite AI models. The ultimate AI studio for creators.",
     images: [
       {
         url: "https://deepsharkai.art/og-image.png",
@@ -42,9 +46,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "DeepShark AI • Layer, Edit & Upscale",
+    title: "DeepShark AI • Layer, Motion & Upscale",
     description:
-      "Extract image layers, edit, and upscale 4K using elite AI models. Turn flat images into layers instantly.",
+      "Extract image layers, edit, motion and upscale 4K using elite AI models. Turn flat images into layers instantly.",
     images: ["https://deepsharkai.art/og-image.png"],
   },
 };

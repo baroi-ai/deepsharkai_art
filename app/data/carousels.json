@@ -1,0 +1,42 @@
+[
+  {
+    "id": 1,
+    "title": "Nano Banana 2",
+    "description": "Google's most advanced image generation model, now in your studio.",
+    "image_url": "/carousel/nano-banna.webp",
+    "cta_text": "Start Creating",
+    "cta_link": "/dashboard/image/generator",
+    "order": 0,
+    "is_active": true
+  },
+  {
+    "id": 2,
+    "title": "Motion Generator",
+    "description": "Transform static images into cinematic 3D motion graphics instantly.",
+    "image_url": "/carousel/motion.webp",
+    "cta_text": "Try Motion",
+    "cta_link": "/dashboard/video/motions",
+    "order": 1,
+    "is_active": true
+  },
+  {
+    "id": 3,
+    "title": "SeaDream 4.5",
+    "description": "Experience ultra-realistic textures and artistic depth in every render.",
+    "image_url": "/carousel/see.webp",
+    "cta_text": "Explore SeaDream",
+    "cta_link": "/dashboard/image/generator",
+    "order": 2,
+    "is_active": true
+  },
+  {
+    "id": 4,
+    "title": "Video Generator",
+    "description": "The future of cinema is coming. High-fidelity video generation from text.",
+    "image_url": "/carousel/video.webp",
+    "cta_text": "Coming Soon",
+    "cta_link": "/dashboard/coming-soon",
+    "order": 3,
+    "is_active": true
+  }
+]

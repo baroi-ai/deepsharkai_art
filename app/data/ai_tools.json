@@ -1,0 +1,164 @@
+[
+  {
+    "id": 1,
+    "name": "Magic eraser",
+    "description": "Remove any object from image",
+    "image_url": "/tools/magic_eraser.webm",
+    "link": "/dashboard/image/eraser",
+    "badge": "Free",
+    "category": "image"
+  },
+  {
+    "id": 2,
+    "name": "Caption Generator",
+    "description": "Generate caption for free",
+    "image_url": "/tools/caption-tool.webm",
+    "link": "/dashboard/video/caption",
+    "badge": "Free",
+    "category": "video"
+  },
+  {
+    "id": 3,
+    "name": "Upscaler",
+    "description": "Instantly upscale you images in 4K",
+    "image_url": "/tools/image-upsclaer-tool.webm",
+    "link": "/dashboard/image/upscaler",
+    "badge": "Hot",
+    "category": "image"
+  },
+  {
+    "id": 4,
+    "name": "Angle Changer",
+    "description": "Change angle of any image",
+    "image_url": "/tools/image-angle-tool.webm",
+    "link": "/dashboard/image/angle",
+    "badge": "New",
+    "category": "image"
+  },
+  {
+    "id": 5,
+    "name": "Bg Remover",
+    "description": "Remove Any Image background",
+    "image_url": "/tools/image-bg-remover-toll.webm",
+    "link": "/dashboard/image/bg-remover",
+    "badge": "Free",
+    "category": "image"
+  },
+  {
+    "id": 6,
+    "name": "Image Edit",
+    "description": "Edit image with text and inpaint",
+    "image_url": "/tools/image-edit-tool.webm",
+    "link": "/dashboard/image/edit",
+    "badge": "Hot",
+    "category": "image"
+  },
+  {
+    "id": 7,
+    "name": "Skin Enhancer",
+    "description": "Get rid of AI plastic skin",
+    "image_url": "/tools/skin-enchor-tool.webm",
+    "link": "/dashboard/image/skin-enhancer",
+    "badge": null,
+    "category": "image"
+  },
+  {
+    "id": 8,
+    "name": "Frame-extractor",
+    "description": "Extract Frames from video.",
+    "image_url": "/tools/Fame-extarctor-tool.webm",
+    "link": "/dashboard/video/frame-extractor",
+    "badge": "Free",
+    "category": "video"
+  },
+  {
+    "id": 9,
+    "name": "AI Image Generator",
+    "description": "Instantly Generate Image from text or image",
+    "image_url": "/tools/ai-image-generator.webm",
+    "link": "/dashboard/image/generator",
+    "badge": "Hot",
+    "category": "image"
+  },
+  {
+    "id": 10,
+    "name": "Layers",
+    "description": "Extract Layers from image",
+    "image_url": "/tools/decompose.webm",
+    "link": "/dashboard/image/layers",
+    "badge": "new",
+    "category": "image"
+  },
+  {
+    "id": 11,
+    "name": "Transcribe ",
+    "description": "Transcribe Any audio or video file",
+    "image_url": "/tools/transciber.webm",
+    "link": "/dashboard/text/transcribe",
+    "badge": "Free",
+    "category": "text"
+  },
+  {
+    "id": 12,
+    "name": "Ai Video Generator",
+    "description": "Realistic video using text or image",
+    "image_url": "/tools/ai-ugc-ad-generator.webm",
+    "link": "/dashboard/coming-soon",
+    "badge": "Soon...",
+    "category": "video"
+  },
+  {
+    "id": 13,
+    "name": "Image converter",
+    "description": "convert any image and compress",
+    "image_url": "/tools/imagec.webm",
+    "link": "/dashboard/image/converter",
+    "badge": "Free",
+    "category": "image"
+  },
+  {
+    "id": 14,
+    "name": "AI Voice Generator",
+    "description": "Generate studio-quality, private speech locally from text.",
+    "image_url": "/tools/ai-voice.webm",
+    "link": "/dashboard/audio/voice",
+    "badge": "Free",
+    "category": "audio"
+  },
+  {
+    "id": 15,
+    "name": "Auto Zoom",
+    "description": "Automatically add dynamic zoom cuts and camera movements",
+    "image_url": "/tools/Auto-zoom.webm",
+    "link": "/dashboard/video/auto-zoom",
+    "badge": "Free",
+    "category": "Video"
+  },
+  {
+    "id": 16,
+    "name": "Remove Silence",
+    "description": "Automatically detect and cut silent pauses from your videos.",
+    "image_url": "/tools/ai-voice.webm",
+    "link": "/dashboard/video/remove-silences",
+    "badge": "Free",
+    "category": "Video"
+  },
+  {
+    "id": 17,
+    "name": "Video Eraser",
+    "description": "Remove Watermarks, logos, text, and unwanted objects from videos.",
+    "image_url": "/tools/video-eraser.webm",
+    "link": "/dashboard/video/eraser",
+    "badge": "Free",
+    "category": "Video"
+  },
+  {
+    "id": 18,
+    "name": "Motion Generator",
+    "description": "Render beautiful 3D motion graphics instantly from text using AI.",
+    "image_url": "/tools/motions-tool.webm",
+    "link": "/dashboard/video/motions",
+    "badge": "Free",
+    "category": "Video"
+  }
+]

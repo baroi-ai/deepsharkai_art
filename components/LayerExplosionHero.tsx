@@ -74,7 +74,7 @@ const LayerExplosionHero = () => {
             >
               {/* 👈 PUT YOUR BACKGROUND IMAGE PATH HERE */}
               <img
-                src="/tools/layer-3.png"
+                src="/tools/layer-3.webp"
                 alt="Background Layer"
                 className="absolute inset-0 w-full h-full object-cover opacity-80"
               />
@@ -90,7 +90,7 @@ const LayerExplosionHero = () => {
             >
               {/* 👈 PUT YOUR SECOND LAYER PATH HERE (Use a transparent PNG) */}
               <img
-                src="/tools/layer-2.png"
+                src="/tools/layer-2.webp"
                 alt="Elements Layer"
                 className="absolute inset-0 w-full h-full object-cover"
               />
@@ -106,7 +106,7 @@ const LayerExplosionHero = () => {
             >
               {/* 👈 PUT YOUR THIRD LAYER PATH HERE (Use a transparent PNG) */}
               <img
-                src="/tools/layer-4.png"
+                src="/tools/layer-4.webp"
                 alt="Lighting Layer"
                 className="absolute inset-0 w-full h-full object-cover mix-blend-screen"
               />
@@ -122,7 +122,7 @@ const LayerExplosionHero = () => {
             >
               {/* 👈 PUT YOUR MAIN SUBJECT PATH HERE */}
               <img
-                src="/tools/layer-1.png"
+                src="/tools/layer-1.webp"
                 alt="Main Subject"
                 className="absolute inset-0 w-full h-full object-cover"
               />
@@ -140,7 +140,7 @@ const LayerExplosionHero = () => {
             >
               {/* 👈 PUT YOUR FOREGROUND/TEXT PATH HERE (Use a transparent PNG) */}
               <img
-                src="/tools/layer-5.png"
+                src="/tools/layer-5.webp"
                 alt="Foreground Layer"
                 className="absolute inset-0 w-full h-full object-cover"
               />

@@ -1,19 +1,20 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
   Menu,
   Coins,
   PlusCircle,
-  Download,
+  Bell,
   LogIn,
   User,
   CreditCard,
   FolderCheck,
   MailCheck,
   LogOut,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -27,6 +28,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { AuthModal } from "@/components/AuthModal";
 import { useSession, signOut } from "next-auth/react";
+import { useQuery } from "@tanstack/react-query";
+import { getGlobalNotifications } from "@/app/actions/notification-actions";
 
 interface DashboardNavbarProps {
   toggleSidebar: () => void;
@@ -35,9 +38,34 @@ interface DashboardNavbarProps {
 const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
   const { data: session } = useSession();
   const user = session?.user;
-
-  // ✅ NEW: State to track if the Google image failed to load
   const [imageError, setImageError] = useState(false);
+  const [lastViewedId, setLastViewedId] = useState<string | null>(null);
+
+  // 1. Fetch Real Global Notifications from DB
+  const { data: notifications = [] } = useQuery({
+    queryKey: ["global-notifications"],
+    queryFn: () => getGlobalNotifications(),
+    enabled: !!user, // Only fetch if logged in
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
+  // 2. Load the "last seen" ID from local storage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("deepshark_last_notif_id");
+    setLastViewedId(saved);
+  }, []);
+
+  // 3. Logic: Show red dot if the latest notification ID doesn't match our saved ID
+  const latestNotifId = notifications.length > 0 ? notifications[0].id : null;
+  const hasUnread = latestNotifId && latestNotifId !== lastViewedId;
+
+  // 4. Function: Mark as read when the user clicks the bell
+  const handleOpenNotifications = (open: boolean) => {
+    if (open && latestNotifId) {
+      localStorage.setItem("deepshark_last_notif_id", latestNotifId);
+      setLastViewedId(latestNotifId);
+    }
+  };
 
   // @ts-ignore
   const userCoins = user?.credits || 0;
@@ -52,16 +80,11 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
             size="icon"
             className="md:hidden text-gray-400 hover:text-white hover:bg-white/10"
             onClick={toggleSidebar}
-            aria-label="Toggle Sidebar Menu"
           >
             <Menu className="h-6 w-6" />
           </Button>
 
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-2"
-            aria-label="Go to Dashboard Home"
-          >
+          <Link href="/dashboard" className="flex items-center gap-2">
             <Image
               src="/logo.webp"
               alt="DeepShark AI Logo"
@@ -70,7 +93,7 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
               priority={true}
               className="h-8 w-auto md:h-10 drop-shadow-[0_0_5px_rgba(20,184,166,0.5)] object-contain"
             />
-            <span className="hidden text-teal-500 sm:inline-block text-lg md:text-xl font-bold drop-shadow-[0_0_5px_rgba(20,184,166,0.5)]">
+            <span className="hidden text-teal-500 sm:inline-block text-lg md:text-xl font-bold drop-shadow-[0_0_5_rgba(20,184,166,0.5)]">
               DeepShark AI
             </span>
           </Link>
@@ -78,20 +101,76 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
 
         {/* Right side */}
         <div className="flex items-center gap-3 md:gap-4">
-          <Link
-            href="/download"
-            className="hidden md:block"
-            aria-label="Download Desktop App"
-          >
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-gray-400 hover:text-white hover:bg-white/10"
-              aria-label="Download App"
-            >
-              <Download className="h-5 w-5" />
-            </Button>
-          </Link>
+          {/* ✅ NOTIFICATIONS DROPDOWN (Global Broadcasts) */}
+          {user && (
+            <DropdownMenu onOpenChange={handleOpenNotifications}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="relative text-gray-400 hover:text-white hover:bg-white/10"
+                >
+                  <Bell className="h-5 w-5" />
+                  {hasUnread && (
+                    <span className="absolute top-2 right-2.5 h-2 w-2 rounded-full bg-red-500 border-2 border-slate-950 animate-pulse" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                className="w-72 bg-slate-950 border-white/10 text-white"
+                align="end"
+              >
+                <DropdownMenuLabel>System Updates</DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-white/10" />
+
+                {notifications.length > 0 ? (
+                  notifications.map((n) => (
+                    <DropdownMenuItem
+                      key={n.id}
+                      className="flex flex-col items-start gap-1 p-3 focus:bg-white/5 cursor-default"
+                      asChild
+                    >
+                      {n.link ? (
+                        <Link href={n.link}>
+                          <div className="flex items-center justify-between w-full">
+                            <span className="text-xs font-bold text-teal-400">
+                              {n.title}
+                            </span>
+                            <Sparkles className="h-3 w-3 text-teal-400" />
+                          </div>
+                          <p className="text-[11px] text-gray-400 leading-tight">
+                            {n.message}
+                          </p>
+                        </Link>
+                      ) : (
+                        <div>
+                          <div className="flex items-center justify-between w-full">
+                            <span className="text-xs font-bold text-teal-400">
+                              {n.title}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-gray-400 leading-tight">
+                            {n.message}
+                          </p>
+                        </div>
+                      )}
+                    </DropdownMenuItem>
+                  ))
+                ) : (
+                  <div className="p-4 text-center text-xs text-gray-500">
+                    No active announcements.
+                  </div>
+                )}
+
+                <DropdownMenuSeparator className="bg-white/10" />
+                <DropdownMenuLabel className="p-0 text-center">
+                  <div className="py-2 text-[9px] uppercase tracking-widest text-gray-600 font-bold">
+                    Broadcast Feed
+                  </div>
+                </DropdownMenuLabel>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           {/* Credits Badge */}
           {user ? (
@@ -100,7 +179,6 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
               size="sm"
               className="group flex items-center gap-1.5 border-teal-500/30 bg-teal-900/10 hover:bg-teal-900/20 text-teal-100 rounded-full h-8"
               asChild
-              aria-label={`View Credits: ${userCoins} available`}
             >
               <Link href="/dashboard/billing">
                 <Coins className="h-4 w-4 text-teal-400" />
@@ -115,7 +193,6 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
                   variant="outline"
                   size="sm"
                   className="group flex items-center gap-1.5 border-teal-500/30 bg-teal-900/10 hover:bg-teal-900/20 text-teal-100 rounded-full h-8 cursor-pointer"
-                  aria-label="Purchase Credits"
                 >
                   <Coins className="h-4 w-4 text-teal-400" />
                   <span className="text-sm font-medium">0</span>
@@ -132,10 +209,8 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
                 <Button
                   variant="ghost"
                   className="relative h-9 w-9 rounded-full p-0 ring-2 ring-transparent hover:ring-teal-500/50 transition-all"
-                  aria-label="Open User Menu"
                 >
                   <Avatar className="h-full w-full border border-white/10">
-                    {/* ✅ FIX: Added onError to hide the image and trigger the fallback if Google rate limits us */}
                     {!imageError && (
                       <AvatarImage
                         src={user.image || ""}
@@ -159,7 +234,7 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
                     <p className="text-sm font-medium leading-none">
                       {user.name}
                     </p>
-                    <p className="text-xs leading-none text-muted-foreground text-gray-400">
+                    <p className="text-xs leading-none text-gray-400">
                       {user.email}
                     </p>
                   </div>
@@ -212,7 +287,6 @@ const DashboardNavbar: React.FC<DashboardNavbarProps> = ({ toggleSidebar }) => {
                 <Button
                   variant="ghost"
                   className="text-gray-300 hover:text-teal-400 hover:bg-white/5"
-                  aria-label="Login to Account"
                 >
                   <LogIn className="h-5 w-5 mr-2" /> Login
                 </Button>

@@ -67,7 +67,12 @@ const ToolCard = ({ tool, router }: { tool: any; router: any }) => {
             className="absolute inset-0 w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-300"
           >
             {/* ✅ Only insert <source> if in view to save bandwidth */}
-            {isVideoLoaded && <source src={imageUrl} type="video/mp4" />}
+            {isVideoLoaded && (
+              <source
+                src={imageUrl}
+                type={imageUrl.endsWith(".webm") ? "video/webm" : "video/mp4"}
+              />
+            )}
           </video>
         ) : (
           // ✅ NEXT.JS IMAGE: Auto lazy-load & optimization

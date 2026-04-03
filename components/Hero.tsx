@@ -138,9 +138,9 @@ const Hero = () => {
               <span className="text-gray-300">AI Models & Tools</span>
             </div>
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight">
-              <span className="block">AI Image Studio</span>
+              <span className="block">AI Creative Studio</span>
               <span className="text-teal-400 mt-2 block drop-shadow-[0_0_8px_rgba(20,184,166,0.5)] whitespace-nowrap text-3xl md:text-6xl lg:text-7xl">
-                Layer • Edit • Upscale
+                Layer • Motion • Upscale
               </span>
             </h1>
             <p className="text-xl md:text-2xl text-gray-300 max-w-3xl mx-auto">
