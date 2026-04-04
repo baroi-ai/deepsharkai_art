@@ -91,12 +91,12 @@
   },
   {
     "id": 11,
-    "name": "Wan Angel",
+    "name": "Wan Angle",
     "type": "Image",
     "icon": "/icons/wan.webp",
-    "description": "Change Angel of any image",
+    "description": "Change Angle of any image",
     "rating": 5,
-    "link": "/dashboard/image/angel",
+    "link": "/dashboard/image/angle",
     "badge": "New"
   },
   {

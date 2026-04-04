@@ -708,7 +708,7 @@ export default function AutoZoomPage() {
                   <div className="text-xs font-medium text-white/50">
                     Max Length
                   </div>
-                  <div className="text-[11px] text-white/30">10 minutes</div>
+                  <div className="text-[11px] text-white/30">2 minutes</div>
                 </div>
               </div>
               <div className="flex-1 flex items-center gap-2 bg-white/3 border border-white/6 rounded-xl px-4 py-3">
@@ -771,6 +771,7 @@ export default function AutoZoomPage() {
               compositionHeight={videoDimensions.h}
               style={{ width: "100%", height: "100%" }}
               loop
+              acknowledgeRemotionLicense
             />
 
             {isExporting && (

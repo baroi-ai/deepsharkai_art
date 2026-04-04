@@ -5,7 +5,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: '*',
       allow: '/',
-      disallow: ['/api/', '/dashboard/profile/'],
+      disallow: ['/api/', '/dashboard/profile/', '/dashboard/coming-soon'],
     },
     sitemap: 'https://deepsharkai.art/sitemap.xml',
   };

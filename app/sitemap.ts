@@ -1,11 +1,10 @@
 import { MetadataRoute } from "next";
 import toolsData from "@/app/data/ai_tools.json";
-import modelsData from "@/app/data/ai_models.json";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = "https://deepsharkai.art";
 
-  // 1. Define your Static Routes
+  // 1. Define Static Routes
   const staticRoutes = [
     "",
     "/dashboard",
@@ -15,29 +14,29 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/contact",
     "/privacy",
     "/terms",
-  ].map((route) => ({
-    url: `${baseUrl}${route}`,
-    lastModified: new Date(),
-    changeFrequency: "daily" as const,
-    priority: route === "" ? 1 : 0.8,
-  }));
+  ];
 
-  // 2. Generate Dynamic Routes for Tools
-  const toolRoutes = toolsData.map((tool: any) => ({
-    url: `${baseUrl}${tool.link}`,
-    lastModified: new Date(),
-    changeFrequency: "weekly" as const,
-    priority: 0.6,
-  }));
+  // 2. Combine all links from JSON files
+  const dynamicLinks = [...toolsData.map((t: any) => t.link)];
 
-  // 3. Generate Dynamic Routes for Models
-  const modelRoutes = modelsData.map((model: any) => ({
-    url: `${baseUrl}${model.link}`,
-    lastModified: new Date(),
-    changeFrequency: "weekly" as const,
-    priority: 0.6,
-  }));
+  // 3. Create a UNIQUE set of all paths
+  // This automatically removes duplicates like the double "angel"
+  const allUniquePaths = Array.from(
+    new Set([...staticRoutes, ...dynamicLinks]),
+  );
 
-  // Combine everything
-  return [...staticRoutes, ...toolRoutes, ...modelRoutes];
+  // 4. Filter out dead links and map to sitemap format
+  return allUniquePaths
+    .filter(
+      (path) =>
+        path !== "/dashboard/image-generation" &&
+        path !== "/dashboard/coming-soon",
+    ) // Remove dead links
+    .map((path) => ({
+      url: `${baseUrl}${path}`,
+      lastModified: new Date(),
+      changeFrequency:
+        path === "" || path.startsWith("/dashboard") ? "daily" : "weekly",
+      priority: path === "" ? 1 : path.startsWith("/dashboard") ? 0.8 : 0.6,
+    }));
 }

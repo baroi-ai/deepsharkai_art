@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+} from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,73 +78,95 @@ const MyGenerationsPage = () => {
   const [isDownloading, setIsDownloading] = useState<Record<string, boolean>>(
     {},
   );
-  const [showFullPrompt, setShowFullPrompt] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<DisplayItem | null>(null);
 
-  // --- 1. Fetch Logic (Paginated) ---
-  const fetchGenerations = async (cursor: string | null = null) => {
-    try {
-      // Backend should be configured to return 20 items by default
-      const url = cursor
-        ? `/api/user/generations?cursor=${cursor}`
-        : `/api/user/generations`;
+  const observerTarget = useRef<HTMLDivElement>(null);
 
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Failed to fetch");
-      const data = await res.json();
+  // --- 1. Fetch Logic (Paginated + Server-Side Search) ---
+  const fetchGenerations = useCallback(
+    async (cursor: string | null = null, search: string = "") => {
+      try {
+        // Build URL with cursor and search query
+        let url = `/api/user/generations?limit=20`;
+        if (cursor) url += `&cursor=${cursor}`;
+        if (search) url += `&search=${encodeURIComponent(search)}`;
 
-      const formattedItems: DisplayItem[] = data.generations.map(
-        (gen: any) => ({
-          id: gen.id,
-          previewUrl: gen.imageUrl || gen.fallbackUrl,
-          width: 1024,
-          height: 1024,
-          ratioType: "Custom",
-          createdAt: gen.createdAt,
-          modelName: gen.model || "Unknown Model",
-          prompt: gen.prompt || "No prompt provided",
-        }),
-      );
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Failed to fetch");
+        const data = await res.json();
 
-      if (cursor) {
-        setItems((prev) => [...prev, ...formattedItems]);
-      } else {
-        setItems(formattedItems);
+        const formattedItems: DisplayItem[] = data.generations.map(
+          (gen: any) => ({
+            id: gen.id,
+            previewUrl: gen.imageUrl || gen.fallbackUrl,
+            width: 1024,
+            height: 1024,
+            ratioType: "Custom",
+            createdAt: gen.createdAt,
+            modelName: gen.model || "Unknown Model",
+            prompt: gen.prompt || "No prompt provided",
+          }),
+        );
+
+        if (cursor) {
+          setItems((prev) => [...prev, ...formattedItems]);
+        } else {
+          // If no cursor, it's a fresh load or a new search - replace the list
+          setItems(formattedItems);
+        }
+
+        setNextCursor(data.nextCursor);
+        setHasMore(!!data.nextCursor);
+      } catch (error) {
+        toast.error("Could not load your assets.");
       }
+    },
+    [],
+  );
 
-      setNextCursor(data.nextCursor);
-      setHasMore(!!data.nextCursor);
-    } catch (error) {
-      toast.error("Could not load your assets.");
-    }
-  };
-
-  // Initial Load
+  // Handle Search Changes (Triggers fresh fetch)
   useEffect(() => {
-    const init = async () => {
+    const triggerSearch = async () => {
       setIsLoadingInitial(true);
-      await fetchGenerations(null);
+      await fetchGenerations(null, debouncedSearchQuery);
       setIsLoadingInitial(false);
     };
-    init();
-  }, []);
+    triggerSearch();
+  }, [debouncedSearchQuery, fetchGenerations]);
 
   // Load More Handler
-  const handleLoadMore = async () => {
+  const handleLoadMore = useCallback(async () => {
     if (!nextCursor || isLoadingMore) return;
     setIsLoadingMore(true);
-    await fetchGenerations(nextCursor);
+    await fetchGenerations(nextCursor, debouncedSearchQuery);
     setIsLoadingMore(false);
-  };
+  }, [nextCursor, isLoadingMore, debouncedSearchQuery, fetchGenerations]);
 
-  const displayedItems = useMemo(() => {
-    if (!debouncedSearchQuery) return items;
-    return items.filter((item) =>
-      item.prompt?.toLowerCase().includes(debouncedSearchQuery.toLowerCase()),
+  // Infinite Scroll Observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries[0].isIntersecting &&
+          hasMore &&
+          !isLoadingMore &&
+          !isLoadingInitial
+        ) {
+          handleLoadMore();
+        }
+      },
+      { threshold: 0.1 },
     );
-  }, [items, debouncedSearchQuery]);
 
+    const currentTarget = observerTarget.current;
+    if (currentTarget) observer.observe(currentTarget);
+    return () => {
+      if (currentTarget) observer.unobserve(currentTarget);
+    };
+  }, [hasMore, isLoadingMore, isLoadingInitial, handleLoadMore]);
+
+  // --- Helpers ---
   const handleOpenDeleteConfirm = (item: DisplayItem) => {
     setItemToDelete(item);
     setIsDeleteConfirmOpen(true);
@@ -146,7 +174,6 @@ const MyGenerationsPage = () => {
 
   const handleConfirmDelete = async () => {
     if (!itemToDelete) return;
-
     const previousItems = [...items];
     setItems((prev) => prev.filter((i) => i.id !== itemToDelete.id));
     setIsDeleteConfirmOpen(false);
@@ -168,25 +195,21 @@ const MyGenerationsPage = () => {
   const handleDownload = async (item: DisplayItem) => {
     setIsDownloading((prev) => ({ ...prev, [item.id]: true }));
     try {
-      const proxyUrl = `/api/download?url=${encodeURIComponent(
-        item.previewUrl,
-      )}`;
+      const proxyUrl = `/api/download?url=${encodeURIComponent(item.previewUrl)}`;
       const response = await fetch(proxyUrl);
       if (!response.ok) throw new Error("Download failed");
-
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      const filename = `generation-${item.id}.png`;
-      link.setAttribute("download", filename);
+      link.setAttribute("download", `generation-${item.id}.png`);
       document.body.appendChild(link);
       link.click();
       link.parentNode?.removeChild(link);
       window.URL.revokeObjectURL(url);
       toast.success("Download started");
     } catch (error) {
-      toast.error("Download failed. Try again.");
+      toast.error("Download failed.");
     } finally {
       setIsDownloading((prev) => ({ ...prev, [item.id]: false }));
     }
@@ -194,7 +217,6 @@ const MyGenerationsPage = () => {
 
   const handleViewDetails = (item: DisplayItem) => {
     setSelectedItem(item);
-    setShowFullPrompt(false);
     setIsModalOpen(true);
   };
 
@@ -212,7 +234,7 @@ const MyGenerationsPage = () => {
         <div className="relative w-full md:w-80">
           <Input
             type="search"
-            placeholder="Search prompt..."
+            placeholder="Search all generations..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-10 bg-black/40 border-white/10 text-white focus-visible:ring-teal-500 rounded-full h-10 md:h-11 backdrop-blur-md text-sm"
@@ -231,169 +253,177 @@ const MyGenerationsPage = () => {
         </div>
       </div>
 
-      {/* --- MASONRY GRID --- */}
+      {/* --- MASONRY GRID (Manual Columns to prevent jumping) --- */}
       <div className="min-h-[300px]">
-        {displayedItems.length === 0 && !isLoadingInitial ? (
+        {items.length === 0 && !isLoadingInitial ? (
           <div className="text-center py-32 text-gray-500 border border-dashed border-white/10 rounded-xl bg-white/5">
             <LayoutGrid className="h-16 w-16 mx-auto mb-4 opacity-30" />
             <p className="text-lg font-medium">No assets found.</p>
             <p className="text-sm text-gray-400 mt-2">
-              Start creating to populate your gallery!
+              Try a different search or start creating!
             </p>
           </div>
         ) : (
-          <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-2 md:gap-4 space-y-2 md:space-y-4">
-            {displayedItems.map((item) => (
+          <div className="flex flex-row gap-2 md:gap-4 items-start">
+            {[
+              ...Array(
+                typeof window !== "undefined" && window.innerWidth < 768
+                  ? 2
+                  : 4,
+              ),
+            ].map((_, colIndex, cols) => (
               <div
-                key={item.id}
-                className="break-inside-avoid mb-2 md:mb-4 group relative bg-gray-900 rounded-lg md:rounded-xl overflow-hidden hover:shadow-2xl hover:shadow-teal-900/20 transition-all duration-300 border border-white/5"
+                key={colIndex}
+                className="flex flex-col gap-2 md:gap-4 flex-1"
               >
-                <div
-                  className="cursor-zoom-in relative w-full"
-                  onClick={() => handleViewDetails(item)}
-                >
-                  <Image
-                    src={item.previewUrl}
-                    alt="Generation"
-                    width={item.width}
-                    height={item.height}
-                    className="w-full h-auto object-cover block"
-                    loading="lazy"
-                    unoptimized={true}
-                  />
-                  <div className="hidden md:flex absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex-col justify-end p-3">
-                    <p className="text-white text-xs line-clamp-2 mb-8 font-medium opacity-90">
-                      {item.prompt}
-                    </p>
-                  </div>
-                </div>
-
-                {/* --- CARD ACTIONS --- */}
-                <div className="absolute top-1 right-1 md:top-2 md:right-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 flex gap-2">
-                  <Button
-                    variant="secondary"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDownload(item);
-                    }}
-                    disabled={isDownloading[item.id]}
-                    className="h-6 w-6 md:h-8 md:w-8 rounded-full bg-black/40 md:bg-black/60 hover:bg-black text-white border border-white/10 backdrop-blur-md"
-                  >
-                    {isDownloading[item.id] ? (
-                      <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" />
-                    ) : (
-                      <Download className="h-3 w-3 md:h-4 md:w-4" />
-                    )}
-                  </Button>
-
-                  <Button
-                    variant="secondary"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleOpenDeleteConfirm(item);
-                    }}
-                    className="hidden md:flex h-6 w-6 md:h-8 md:w-8 rounded-full bg-black/40 md:bg-black/60 hover:bg-red-600 hover:text-white text-white border border-white/10 backdrop-blur-md"
-                  >
-                    <Trash2 className="h-3 w-3 md:h-4 md:w-4" />
-                  </Button>
-                </div>
+                {items
+                  .filter((_, idx) => idx % cols.length === colIndex)
+                  .map((item) => (
+                    <div
+                      key={item.id}
+                      className="group relative bg-gray-900 rounded-lg md:rounded-xl overflow-hidden hover:shadow-2xl hover:shadow-teal-900/20 transition-all duration-300 border border-white/5"
+                    >
+                      <div
+                        className="cursor-zoom-in relative w-full"
+                        onClick={() => handleViewDetails(item)}
+                      >
+                        <div
+                          style={{
+                            aspectRatio: `${item.width} / ${item.height}`,
+                          }}
+                          className="bg-white/5 w-full"
+                        >
+                          <Image
+                            src={item.previewUrl}
+                            alt="Generation"
+                            width={item.width}
+                            height={item.height}
+                            className="w-full h-auto object-cover block"
+                            loading="lazy"
+                            unoptimized={true}
+                          />
+                        </div>
+                        <div className="hidden md:flex absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex-col justify-end p-3">
+                          <p className="text-white text-xs line-clamp-2 mb-8 font-medium opacity-90">
+                            {item.prompt}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="absolute top-1 right-1 md:top-2 md:right-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 flex gap-2">
+                        <Button
+                          variant="secondary"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownload(item);
+                          }}
+                          disabled={isDownloading[item.id]}
+                          className="h-6 w-6 md:h-8 md:w-8 rounded-full bg-black/40 md:bg-black/60 hover:bg-black text-white border border-white/10 backdrop-blur-md"
+                        >
+                          {isDownloading[item.id] ? (
+                            <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" />
+                          ) : (
+                            <Download className="h-3 w-3 md:h-4 md:w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenDeleteConfirm(item);
+                          }}
+                          className="hidden md:flex h-6 w-6 md:h-8 md:w-8 rounded-full bg-black/40 md:bg-black/60 hover:bg-red-600 hover:text-white text-white border border-white/10 backdrop-blur-md"
+                        >
+                          <Trash2 className="h-3 w-3 md:h-4 md:w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
               </div>
             ))}
           </div>
         )}
 
-        {/* --- LOAD MORE BUTTON --- */}
-        <div className="py-8 md:py-12 flex justify-center w-full">
+        {/* --- INFINITE SCROLL TARGET --- */}
+        <div
+          ref={observerTarget}
+          className="py-8 md:py-12 flex justify-center w-full"
+        >
           {isLoadingInitial || isLoadingMore ? (
             <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
-          ) : hasMore && displayedItems.length > 0 ? (
+          ) : hasMore ? (
             <Button
               variant="outline"
               onClick={handleLoadMore}
-              className="rounded-full border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 px-8 hover:text-white transition-colors"
+              className="rounded-full border-white/10 bg-white/5 text-gray-300 px-8 hover:text-white"
             >
               Load More
             </Button>
+          ) : items.length > 0 ? (
+            <p className="text-gray-500 text-sm italic">
+              You've reached the end of your assets.
+            </p>
           ) : null}
         </div>
       </div>
 
       {/* --- Detail View Modal --- */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent
-          className="max-w-[98vw] w-full h-[95vh] md:h-[90vh] p-0 bg-black/95 backdrop-blur-2xl border-white/10 text-gray-100 flex overflow-hidden rounded-xl shadow-2xl flex-col md:flex-row"
-          style={{ maxWidth: "98vw" }}
-        >
+        <DialogContent className="max-w-[98vw] w-full h-[95vh] md:h-[90vh] p-0 bg-black/95 backdrop-blur-2xl border-white/10 text-gray-100 flex overflow-hidden rounded-xl shadow-2xl flex-col md:flex-row">
           {selectedItem && (
             <>
-              {/* Image Side */}
               <div className="flex-1 w-full h-full min-h-0 bg-black/50 flex items-center justify-center p-4">
                 <img
                   src={selectedItem.previewUrl}
-                  alt="Full Preview"
+                  alt="Preview"
                   className="max-w-full max-h-full w-auto h-auto object-contain drop-shadow-2xl"
                 />
               </div>
-
-              {/* Sidebar Info */}
               <div className="w-full md:w-[350px] flex flex-col border-t md:border-t-0 md:border-l border-white/10 bg-black/40 h-[40%] md:h-full shrink-0">
                 <DialogHeader className="p-4 md:p-6 border-b border-white/10 shrink-0">
                   <DialogTitle className="text-lg md:text-xl font-light">
                     Image Details
                   </DialogTitle>
                 </DialogHeader>
-
                 <div className="flex-grow p-4 md:p-6 overflow-y-auto space-y-4 md:space-y-6">
                   <div className="space-y-2">
                     <h4 className="text-xs font-semibold text-teal-500 uppercase tracking-widest flex items-center gap-2">
                       <FileText className="h-3 w-3" /> Prompt
                     </h4>
-                    <div className="text-xs md:text-sm leading-relaxed text-gray-300 font-light max-h-[150px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700">
+                    <div className="text-xs md:text-sm leading-relaxed text-gray-300 font-light max-h-[150px] overflow-y-auto">
                       {selectedItem.prompt}
                     </div>
                   </div>
-
                   <div className="space-y-3 pt-2 md:pt-4 border-t border-white/5">
                     <div className="flex justify-between items-center py-1">
-                      <span className="text-xs md:text-sm text-gray-500 flex items-center gap-2">
-                        <Tags className="h-3 w-3 md:h-4 md:w-4" /> Model
+                      <span className="text-xs text-gray-500 flex items-center gap-2">
+                        <Tags className="h-3 w-3" /> Model
                       </span>
-                      <span className="text-xs md:text-sm text-white font-medium bg-white/10 px-2 py-1 rounded">
+                      <span className="text-xs text-white font-medium bg-white/10 px-2 py-1 rounded">
                         {selectedItem.modelName}
                       </span>
                     </div>
                     <div className="flex justify-between items-center py-1">
-                      <span className="text-xs md:text-sm text-gray-500 flex items-center gap-2">
-                        <LayoutGrid className="h-3 w-3 md:h-4 md:w-4" /> Ratio
+                      <span className="text-xs text-gray-500 flex items-center gap-2">
+                        <CalendarDays className="h-3 w-3" /> Created
                       </span>
-                      <span className="text-xs md:text-sm text-white font-medium">
-                        {selectedItem.ratioType}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center py-1">
-                      <span className="text-xs md:text-sm text-gray-500 flex items-center gap-2">
-                        <CalendarDays className="h-3 w-3 md:h-4 md:w-4" />{" "}
-                        Created
-                      </span>
-                      <span className="text-xs md:text-sm text-white font-medium">
+                      <span className="text-xs text-white font-medium">
                         {new Date(selectedItem.createdAt).toLocaleDateString()}
                       </span>
                     </div>
                   </div>
                 </div>
-
                 <div className="p-4 md:p-6 border-t border-white/10 bg-white/5 flex gap-3 shrink-0">
                   <Button
                     variant="outline"
-                    className="flex-1 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300 h-10 md:h-11"
+                    className="flex-1 border-red-500/30 text-red-400 hover:bg-red-500/10 h-10 md:h-11"
                     onClick={() => handleOpenDeleteConfirm(selectedItem)}
                   >
                     <Trash2 className="mr-2 h-4 w-4" /> Delete
                   </Button>
                   <Button
-                    className="flex-1 bg-gradient-to-r from-cyan-500 to-teal-500 text-white hover:from-teal-600 hover:to-teal-600 border-none h-10 md:h-11 shadow-lg transition-all hover:shadow-teal-500/20"
+                    className="flex-1 bg-gradient-to-r from-cyan-500 to-teal-500 text-white h-10 md:h-11"
                     onClick={() => handleDownload(selectedItem)}
                     disabled={isDownloading[selectedItem.id]}
                   >
@@ -401,7 +431,7 @@ const MyGenerationsPage = () => {
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
                       <Download className="mr-2 h-4 w-4" />
-                    )}
+                    )}{" "}
                     Download
                   </Button>
                 </div>
@@ -431,11 +461,10 @@ const MyGenerationsPage = () => {
                 Cancel
               </Button>
             </DialogClose>
-            {/* ✅ RED DELETE BUTTON */}
             <Button
               variant="destructive"
               onClick={handleConfirmDelete}
-              className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white border-none"
+              className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white"
             >
               Delete
             </Button>

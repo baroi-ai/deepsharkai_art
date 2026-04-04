@@ -470,6 +470,7 @@ export default function SilenceRemoverPage() {
               compositionHeight={videoDimensions.h}
               style={{ width: "100%", height: "100%" }}
               loop
+              acknowledgeRemotionLicense
             />
           ) : (
             // Show original video before processing

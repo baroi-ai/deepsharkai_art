@@ -1,4 +1,12 @@
 import { KokoroTTS } from "kokoro-js";
+import { env } from "@huggingface/transformers";
+
+// 🌍 FORCE CDN LOADING (This stops the VPS from trying to bundle models)
+env.allowLocalModels = false;
+env.useBrowserCache = true;
+// Points to the official Hugging Face mirror
+env.remoteHost = "https://huggingface.co";
+env.remotePathTemplate = "{model}/resolve/{revision}/{file}";
 
 let tts: any = null;
 
@@ -8,12 +16,23 @@ self.onmessage = async (event) => {
   // 🌟 INITIALIZE THE AI MODEL
   if (type === "init") {
     try {
-      self.postMessage({ status: "loading", message: "Loading AI Engine..." });
+      // If already loaded, don't reload
+      if (tts) {
+        self.postMessage({ status: "ready" });
+        return;
+      }
+
+      self.postMessage({
+        status: "loading",
+        message: "Fetching AI Model from CDN...",
+      });
 
       const model_id = "onnx-community/Kokoro-82M-v1.0-ONNX";
+
+      // The model will now download directly to the user's browser cache
       tts = await KokoroTTS.from_pretrained(model_id, {
-        dtype: "q8", // Keeps the download small!
-        device: "wasm", // Runs smoothly in all browsers
+        dtype: "q8",
+        device: "wasm",
       });
 
       self.postMessage({ status: "ready" });
@@ -35,12 +54,10 @@ self.onmessage = async (event) => {
         message: "Synthesizing voice...",
       });
 
-      // Generate the raw audio data
       const audio = await tts.generate(text, {
         voice: voice || "af_heart",
       });
 
-      // Instantly convert it to a playable file
       const wavBlob = audio.toBlob();
 
       self.postMessage({

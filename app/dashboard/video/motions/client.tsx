@@ -190,7 +190,6 @@ async function exportAnimation(
   setExportProgress(0);
 
   try {
-    // 🌟 1. Verify Browser Support
     if (!("VideoEncoder" in window)) {
       throw new Error(
         "Your browser does not support offline video encoding. Please use Chrome or Edge.",
@@ -200,18 +199,7 @@ async function exportAnimation(
     const root = containerRef.current;
     if (!root) throw new Error("Remotion player not found.");
 
-    const iframe = root.querySelector("iframe") as HTMLIFrameElement | null;
-    const captureTarget = iframe?.contentDocument?.body || root;
-
-    const displayW = root.clientWidth || compWidth / 2;
-    const displayH = root.clientHeight || compHeight / 2;
-
-    const offscreen = document.createElement("canvas");
-    offscreen.width = compWidth;
-    offscreen.height = compHeight;
-    const ctx = offscreen.getContext("2d")!;
-
-    // 🌟 2. Load Robust MP4 Encoder (Fixes VLC Corruption & WebM issues)
+    // Load dependencies if missing
     if (!(window as any).Mp4Muxer) {
       await new Promise<void>((res, rej) => {
         const s = document.createElement("script");
@@ -238,76 +226,57 @@ async function exportAnimation(
     const VideoEncoderAny = (window as any).VideoEncoder;
     const VideoFrameAny = (window as any).VideoFrame;
 
-    // 🌟 3. Setup MP4 Muxer
+    // 🌟 SETUP MUXER
     const muxer = new Mp4Muxer.Muxer({
       target: new Mp4Muxer.ArrayBufferTarget(),
       video: {
-        codec: "avc", // H.264 guarantees VLC/Apple compatibility
+        codec: "avc",
         width: compWidth,
         height: compHeight,
       },
-      fastStart: "in-memory", // CRITICAL: Places video metadata at the start so VLC can read it instantly
+      fastStart: "in-memory",
     });
 
     const videoEncoder = new VideoEncoderAny({
       output: (chunk: any, meta: any) => muxer.addVideoChunk(chunk, meta),
-      error: (e: any) => {
-        throw new Error(`Encoding error: ${e.message}`);
-      },
+      error: (e: any) => console.error(e),
     });
 
     videoEncoder.configure({
-      codec: "avc1.420028", // H.264 Baseline Profile (Most compatible)
+      codec: "avc1.420028",
       width: compWidth,
       height: compHeight,
-      bitrate: 10_000_000, // 10 Mbps for crisp HD quality
+      bitrate: 10_000_000,
       framerate: fps,
     });
 
-    toast.info("Building perfect HD video...", {
-      description:
-        "Frame-by-frame encoding ensures zero lag. (Audio requires post-editing)",
-      duration: 5000,
-    });
-
-    // Pause player during export to avoid visual tearing
     playerRef.current?.pause();
 
-    // 🌟 4. Offline Frame-by-Frame Loop (Guarantees perfect timing!)
+    // 🌟 FRAME LOOP
     for (let frame = 0; frame < durationFrames; frame++) {
       playerRef.current?.seekTo(frame);
+      await new Promise((r) => setTimeout(r, 100)); // Increased delay for better stability
 
-      // Let the DOM settle and images load
-      await new Promise((r) => setTimeout(r, 60));
-
-      const snapCanvas = await htmlToImage.toCanvas(captureTarget, {
-        pixelRatio: compWidth / displayW,
-        width: displayW,
-        height: displayH,
-        backgroundColor: "#000000",
-        skipFonts: true,
+      const dataUrl = await htmlToImage.toCanvas(root, {
+        width: compWidth,
+        height: compHeight,
+        style: { transform: "scale(1)", transformOrigin: "top left" },
       });
 
-      ctx.clearRect(0, 0, compWidth, compHeight);
-      ctx.drawImage(snapCanvas, 0, 0, compWidth, compHeight);
-
-      // Math.round() prevents float timestamp corruption
       const timestamp = Math.round((frame * 1000000) / fps);
-      const duration = Math.round(1000000 / fps);
-
-      const videoFrame = new VideoFrameAny(offscreen, {
-        timestamp,
-        duration,
-      });
+      const videoFrame = new VideoFrameAny(dataUrl, { timestamp });
 
       videoEncoder.encode(videoFrame, { keyFrame: frame % 30 === 0 });
       videoFrame.close();
 
-      setExportProgress(Math.round(((frame + 1) / durationFrames) * 100));
+      setExportProgress(Math.round(((frame + 1) / durationFrames) * 95)); // Go to 95%
     }
 
-    // 🌟 5. Finalize MP4 & Download
+    // 🌟 THE FIX: ENSURE FLUSH COMPLETES
+    setExportProgress(98);
     await videoEncoder.flush();
+
+    setExportProgress(99);
     muxer.finalize();
 
     const buffer = muxer.target.buffer;
@@ -316,11 +285,11 @@ async function exportAnimation(
 
     const a = document.createElement("a");
     a.href = url;
-    a.download = `motion-export.mp4`;
+    a.download = `deepshark-motion.mp4`;
     a.click();
 
-    URL.revokeObjectURL(url);
-    toast.success("Export successful! Saved as .mp4");
+    setExportProgress(100);
+    toast.success("Download started!");
   } catch (err: any) {
     toast.error(`Export failed: ${err.message}`);
   } finally {
@@ -986,6 +955,7 @@ export default function MotionGeneratorPage() {
                     controls={!exporting} // 🌟 NEW: Completely removes the timeline/play buttons when exporting!
                     loop
                     autoPlay
+                    acknowledgeRemotionLicense
                   />
                 </div>
               </div>
@@ -1063,7 +1033,7 @@ export default function MotionGeneratorPage() {
 
                     {openMenu === "duration" && (
                       <div className="absolute bottom-full left-0 mb-1.5 w-20 bg-gray-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 py-1 animate-in fade-in zoom-in-95">
-                        {[3, 5, 10, 15].map((opt) => (
+                        {[3, 5, 10].map((opt) => (
                           <button
                             key={opt}
                             onClick={() => {
