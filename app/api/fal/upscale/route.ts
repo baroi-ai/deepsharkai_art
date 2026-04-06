@@ -139,25 +139,27 @@ export async function POST(req: Request) {
     });
 
     // 8. ✅ BACKGROUND TASK: Upload to R2 & Update DB
+    // BACKGROUND TASK: Upload Upscaled Image to R2 (Key-Only Mode)
     (async () => {
       try {
         const res = await fetch(remoteImageUrl);
         if (!res.ok) return;
 
         const buffer = Buffer.from(await res.arrayBuffer());
-        // Organized Folder Structure
-        const filename = `users/${userId}/image/upscaler/${generationId}.png`;
 
-        // Upload to R2
-        const r2Url = await uploadToR2(buffer, filename);
+        // 1. Define the Key (The exact path inside your R2 bucket)
+        const fileKey = `users/${userId}/image/upscaler/${generationId}.png`;
 
-        // Update DB with permanent R2 URL
+        // 2. Upload to R2 (This returns JUST the fileKey string now)
+        const savedKey = await uploadToR2(buffer, fileKey);
+
+        // 3. Update DB with the KEY, never a full URL
         await db
           .update(imageGenerations)
-          .set({ imageUrl: r2Url })
+          .set({ imageUrl: savedKey }) // 🌟 Store the key, not a URL
           .where(eq(imageGenerations.id, generationId));
 
-        console.log("✅ Background R2 upload complete");
+        console.log("✅ Background Upscaler upload complete (Key Saved)");
       } catch (err) {
         console.error("Background Upload Error:", err);
       }

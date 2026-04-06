@@ -7,19 +7,37 @@ import {
   // 👇 IMPORT THESE TYPES
   ListObjectsV2CommandOutput,
   ObjectIdentifier,
+  GetObjectCommand,
 } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 // 1. Initialize the Client
 const R2 = new S3Client({
   region: "auto",
-  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  // 🌟 Use the S3 API URL specifically for the client
+  endpoint: process.env.R2_S3_API_URL,
   credentials: {
     accessKeyId: process.env.R2_ACCESS_KEY_ID!,
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
   },
 });
 
-// 2. Upload Helper Function
+export async function getSignedViewUrl(fileKey: string): Promise<string> {
+  try {
+    const command = new GetObjectCommand({
+      Bucket: process.env.R2_BUCKET_NAME,
+      Key: fileKey,
+    });
+
+    // 🌟 This will now return a full URL starting with https://...
+    const url = await getSignedUrl(R2, command, { expiresIn: 3600 });
+    return url;
+  } catch (error) {
+    console.error("❌ Signing Error:", error);
+    return "";
+  }
+}
+// 2. Upload Helper Function (FIXED FOR PRIVATE STORAGE)
 export async function uploadToR2(
   buffer: Buffer,
   filename: string,
@@ -34,8 +52,10 @@ export async function uploadToR2(
 
   try {
     await R2.send(command);
-    // Return the Public URL
-    return `${process.env.R2_PUBLIC_URL}/${filename}`;
+
+    // ✅ FIX: Stop returning the Public URL (e.g. pub-xxx.r2.dev)
+    // Return only the filename/key. This is what we will save in the DB.
+    return filename;
   } catch (error) {
     console.error("R2 Upload Error:", error);
     throw new Error("Failed to upload image to Cloudflare R2");

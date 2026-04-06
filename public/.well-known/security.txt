@@ -1,0 +1,21 @@
+# ==============================================================================
+# DeepShark AI Security Policy
+# ==============================================================================
+
+# Contact: How to report a security vulnerability
+Contact: mailto:security@deepsharkai.art
+
+# Preferred languages for communication
+Preferred-Languages: en
+
+# Canonical URL for this file
+Canonical: https://deepsharkai.art/.well-known/security.txt
+
+# Expiration: When this file should be considered stale (Usually 1 year out)
+Expires: 2027-04-05T00:00:00.000Z
+
+# Acknowledgments: (Optional) Link to a page where you thank researchers
+# Acknowledgments: https://deepsharkai.art/security/hall-of-fame
+
+# Policy: (Optional) Link to your bug bounty or disclosure policy page
+# Policy: https://deepsharkai.art/security

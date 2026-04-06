@@ -120,16 +120,20 @@ export async function POST(req: Request) {
         if (!res.ok) return;
 
         const buffer = Buffer.from(await res.arrayBuffer());
-        const filename = `users/${userId}/image/edits/${generationId}.jpg`;
 
-        const r2Url = await uploadToR2(buffer, filename);
+        // 1. Define the Key (The exact path inside your R2 bucket)
+        const fileKey = `users/${userId}/image/edits/${generationId}.jpg`;
 
+        // 2. Upload to R2 (This returns JUST the fileKey string now)
+        const savedKey = await uploadToR2(buffer, fileKey);
+
+        // 3. Update DB with the KEY, never a full URL
         await db
           .update(imageGenerations)
-          .set({ imageUrl: r2Url })
+          .set({ imageUrl: savedKey }) // 🌟 Store the key, not a URL
           .where(eq(imageGenerations.id, generationId));
 
-        console.log("✅ Background Edit upload complete");
+        console.log("✅ Background Edit upload complete (Key Saved)");
       } catch (err) {
         console.error("Background Upload Error:", err);
       }

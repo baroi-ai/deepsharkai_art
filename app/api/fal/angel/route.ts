@@ -103,19 +103,20 @@ export async function POST(req: Request) {
         if (!res.ok) return;
 
         const buffer = Buffer.from(await res.arrayBuffer());
-        // Organized Folder Structure
+
+        // 1. Define the Key (The path inside the bucket)
         const filename = `users/${userId}/image/angel/${generationId}.png`;
 
-        // Upload to R2
-        const r2Url = await uploadToR2(buffer, filename);
+        // 2. Upload to R2 (This now returns JUST the filename string)
+        const savedKey = await uploadToR2(buffer, filename);
 
-        // Update DB with permanent R2 URL
+        // 3. Update DB with the KEY (e.g., "users/123/image/angel/456.png")
         await db
           .update(imageGenerations)
-          .set({ imageUrl: r2Url })
+          .set({ imageUrl: savedKey }) // 🌟 Store the key, not the URL
           .where(eq(imageGenerations.id, generationId));
 
-        console.log("✅ Background Angle upload complete");
+        console.log("✅ Background Angel upload complete (Key Saved)");
       } catch (err) {
         console.error("Background Upload Error:", err);
       }

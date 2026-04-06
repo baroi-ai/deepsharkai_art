@@ -6,6 +6,7 @@ import { Toaster } from "sonner";
 import { AuthModal } from "@/components/AuthModal"; // ✅ Import AuthModal
 import { Viewport } from "next";
 import Script from "next/script";
+import CookieBanner from "@/components/CookieBanner";
 
 export const viewport: Viewport = {
   themeColor: "#020617", // slate-950
@@ -39,7 +40,7 @@ export default function RootLayout({
             data-website-id="e256fc72-605e-438d-8e45-5ebf1ef3ab94"
             strategy="afterInteractive"
           />
-
+          <CookieBanner />
           {/* ✅ GLOBAL LISTENER: Handles ?openLogin=true */}
           {/* Hidden, only works via URL params */}
           <div className="hidden">

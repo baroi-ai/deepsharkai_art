@@ -33,6 +33,8 @@ export const users = pgTable("user", {
   credits: integer("credits").default(0),
   referralCode: text("referral_code").unique(),
 
+  isOnboarded: boolean("is_onboarded").default(false),
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

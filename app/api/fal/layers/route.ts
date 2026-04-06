@@ -127,16 +127,23 @@ export async function POST(req: Request) {
           layerRemoteUrls.map(async (remoteUrl, index) => {
             const res = await fetch(remoteUrl);
             if (!res.ok) return;
+
             const buffer = Buffer.from(await res.arrayBuffer());
-            const filename = `users/${userId}/image/decomposed/${groupId}/layer-${index + 1}.png`;
-            const r2Url = await uploadToR2(buffer, filename);
+
+            // 1. Define the Key (The exact path inside your R2 bucket)
+            const fileKey = `users/${userId}/image/decomposed/${groupId}/layer-${index + 1}.png`;
+
+            // 2. Upload to R2 (This returns JUST the fileKey string now)
+            const savedKey = await uploadToR2(buffer, fileKey);
+
+            // 3. Update DB with the KEY, never a full URL
             await db
               .update(imageGenerations)
-              .set({ imageUrl: r2Url })
+              .set({ imageUrl: savedKey }) // 🌟 Store the key, not a URL
               .where(eq(imageGenerations.id, `${groupId}-${index}`));
           }),
         );
-        console.log("✅ Background R2 upload complete");
+        console.log("✅ Background R2 upload complete (Keys Saved)");
       } catch (err) {
         console.error("Background Upload Error:", err);
       }

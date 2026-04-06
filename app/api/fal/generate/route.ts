@@ -157,6 +157,7 @@ export async function POST(req: Request) {
     });
 
     // 8. Background Upload
+    // 8. Background Upload (Updated for Private R2)
     (async () => {
       try {
         await Promise.all(
@@ -165,17 +166,21 @@ export async function POST(req: Request) {
             if (!res.ok) return;
 
             const buffer = Buffer.from(await res.arrayBuffer());
-            const filename = `users/${userId}/image/generator/${record.id}.png`;
 
-            const r2Url = await uploadToR2(buffer, filename);
+            // This is your File Key
+            const fileKey = `users/${userId}/image/generator/${record.id}.png`;
 
+            // uploadToR2 now returns only 'fileKey' string
+            const savedKey = await uploadToR2(buffer, fileKey);
+
+            // Update the database with the KEY, not a full URL
             await db
               .update(imageGenerations)
-              .set({ imageUrl: r2Url })
+              .set({ imageUrl: savedKey }) // Ensure this matches your schema (imageUrl vs image_url)
               .where(eq(imageGenerations.id, record.id));
           }),
         );
-        console.log("✅ Background R2 upload complete");
+        console.log("✅ Background R2 upload complete (Keys saved)");
       } catch (err) {
         console.error("Background Upload Error:", err);
       }

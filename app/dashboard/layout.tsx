@@ -1,3 +1,4 @@
+// app/dashboard/layout.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -21,15 +22,12 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-  // 🌟 FIX: Define isMobile state
   const [isMobile, setIsMobile] = useState(false);
   const [videoSrc, setVideoSrc] = useState(VIDEO_BG.desktop);
 
   useEffect(() => {
     const handleResize = () => {
       const mobile = window.innerWidth < 768;
-      // Update both states at once
       setIsMobile(mobile);
       setVideoSrc(mobile ? VIDEO_BG.mobile : VIDEO_BG.desktop);
     };
@@ -58,12 +56,11 @@ export default function DashboardLayout({
     >
       <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden="true">
         <video
-          key={videoSrc} // Triggers re-render on src change
+          key={videoSrc}
           autoPlay
           loop
           muted
           playsInline
-          // 🌟 Now 'isMobile' is correctly defined!
           poster={isMobile ? "/videos/mobile.webp" : "/videos/hero-poster.webp"}
           className="w-full h-full object-cover opacity-60"
           suppressHydrationWarning

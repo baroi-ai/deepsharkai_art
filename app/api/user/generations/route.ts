@@ -3,10 +3,10 @@ import { auth } from "@/auth";
 import { db } from "../../../db";
 import { imageGenerations } from "../../../db/schema";
 import { eq, desc, lt, and, ilike, SQL } from "drizzle-orm";
-// ✅ Import the R2 deletion helper
-import { deleteFromR2 } from "@/lib/r2";
+// ✅ We MUST use getSignedViewUrl for privacy
+import { deleteFromR2, getSignedViewUrl } from "@/lib/r2";
 
-// GET: Fetch User's Generations with Server-Side Search & Cursor Pagination
+// GET: Fetch User's Generations with PRIVATE Signed URLs
 export async function GET(req: Request) {
   try {
     const session = await auth();
@@ -15,57 +15,83 @@ export async function GET(req: Request) {
     }
 
     const { searchParams } = new URL(req.url);
-    const cursor = searchParams.get("cursor"); // This will be an ISO String from the frontend
+    const cursor = searchParams.get("cursor");
     const search = searchParams.get("search") || "";
     const limit = 20;
 
-    // 🌟 1. Build a Dynamic Filter Array
     const filters: SQL[] = [eq(imageGenerations.userId, session.user.id)];
+    if (search) filters.push(ilike(imageGenerations.prompt, `%${search}%`));
+    if (cursor) filters.push(lt(imageGenerations.createdAt, new Date(cursor)));
 
-    // 🔍 2. Add Search Filter (ILIKE for case-insensitive partial matching)
-    if (search) {
-      filters.push(ilike(imageGenerations.prompt, `%${search}%`));
-    }
-
-    // ⏳ 3. Add Pagination Filter (if cursor exists)
-    if (cursor) {
-      // Convert the string cursor back into a Date object for the Database query
-      filters.push(lt(imageGenerations.createdAt, new Date(cursor)));
-    }
-
-    // 📦 4. Execute Query
     const data = await db
       .select()
       .from(imageGenerations)
       .where(and(...filters))
       .orderBy(desc(imageGenerations.createdAt))
-      .limit(limit + 1); // Fetch 21 to check if there is a next page
+      .limit(limit + 1);
 
-    // 🎯 5. Determine the next cursor
+    // 🔒 PRIVATE MAPPING: Generate a unique signature for every image
+    const generationsWithSignedUrls = await Promise.all(
+      data.map(async (gen) => {
+        let rawPath = gen.imageUrl || "";
+        let displayUrl = gen.fallbackUrl || ""; // Default to fallback if R2 fails
+
+        if (rawPath) {
+          let fileKey = "";
+
+          // Case A: It's a Key (e.g., 'users/...')
+          if (!rawPath.startsWith("http")) {
+            fileKey = rawPath;
+          }
+          // Case B: It's an old full URL (e.g., 'r2.dev')
+          else if (rawPath.includes("r2.dev")) {
+            try {
+              const urlObj = new URL(rawPath);
+              fileKey = urlObj.pathname.startsWith("/")
+                ? urlObj.pathname.substring(1)
+                : urlObj.pathname;
+            } catch (e) {
+              console.error("URL Parsing failed:", rawPath);
+            }
+          }
+
+          // 🌟 THE SIGNING STEP: This is what makes it private
+          if (fileKey) {
+            try {
+              const signed = await getSignedViewUrl(fileKey);
+              if (signed) displayUrl = signed;
+            } catch (err) {
+              console.error("Signing failed for:", fileKey);
+            }
+          }
+        }
+
+        return {
+          ...gen,
+          previewUrl: displayUrl, // This link works for 1 hour ONLY
+        };
+      }),
+    );
+
     let nextCursor: string | null = null;
-    if (data.length > limit) {
-      const nextItem = data.pop(); // Remove the 21st item
-
-      // ✅ FIX: Convert Date to ISO String to satisfy TypeScript "string | null"
-      if (nextItem && nextItem.createdAt) {
-        nextCursor = nextItem.createdAt.toISOString();
-      }
+    if (generationsWithSignedUrls.length > limit) {
+      const nextItem = generationsWithSignedUrls.pop();
+      nextCursor = nextItem?.createdAt
+        ? new Date(nextItem.createdAt).toISOString()
+        : null;
     }
 
     return NextResponse.json({
-      generations: data,
+      generations: generationsWithSignedUrls,
       nextCursor,
     });
   } catch (error) {
-    console.error("Fetch Generations Error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch data" },
-      { status: 500 },
-    );
+    console.error("Fetch Error:", error);
+    return NextResponse.json({ error: "Failed to fetch" }, { status: 500 });
   }
 }
 
-// DELETE: Remove a Generation (DB + R2)
+// DELETE: Remove a Generation
 export async function DELETE(req: Request) {
   try {
     const session = await auth();
@@ -76,49 +102,41 @@ export async function DELETE(req: Request) {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
-    if (!id) {
+    if (!id)
       return NextResponse.json({ error: "ID required" }, { status: 400 });
-    }
 
     const lookupCondition = and(
       eq(imageGenerations.id, id),
       eq(imageGenerations.userId, session.user.id),
     );
 
-    // 1. Fetch the item first to get the Image URL/Key
     const items = await db
       .select()
       .from(imageGenerations)
       .where(lookupCondition)
       .limit(1);
-
     const item = items[0];
 
-    if (!item) {
+    if (!item)
       return NextResponse.json({ error: "Item not found" }, { status: 404 });
-    }
 
-    // 2. Delete from R2 if it exists
     if (item.imageUrl) {
-      try {
-        const urlObj = new URL(item.imageUrl);
-        // Remove leading slash for the R2 key
-        const fileKey = urlObj.pathname.startsWith("/")
-          ? urlObj.pathname.substring(1)
-          : urlObj.pathname;
+      let fileKey = item.imageUrl;
+      if (item.imageUrl.startsWith("http")) {
+        try {
+          const urlObj = new URL(item.imageUrl);
+          fileKey = urlObj.pathname.startsWith("/")
+            ? urlObj.pathname.substring(1)
+            : urlObj.pathname;
+        } catch (e) {}
+      }
 
-        // Security check: Only delete if it's in our user's folder
-        if (fileKey.includes("users/")) {
-          await deleteFromR2(fileKey);
-        }
-      } catch (err) {
-        console.warn("Could not parse URL for R2 deletion:", item.imageUrl);
+      if (fileKey.includes("users/")) {
+        await deleteFromR2(fileKey);
       }
     }
 
-    // 3. Delete from Database
     await db.delete(imageGenerations).where(lookupCondition);
-
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Delete Error:", error);
