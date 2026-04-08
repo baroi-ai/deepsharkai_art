@@ -272,7 +272,7 @@ export default function VideoWatermarkRemoverPage() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] text-gray-300">
-      <div className="grow overflow-hidden relative flex items-center justify-center">
+      <div className="grow no-sidebar-swipe overflow-hidden relative flex items-center justify-center">
         <div className="w-full h-full overflow-auto flex flex-col items-center justify-center p-6">
           {/* EMPTY UI */}
           {status === "idle" && !videoPreviewUrl && (

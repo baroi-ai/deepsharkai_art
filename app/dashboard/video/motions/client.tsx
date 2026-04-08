@@ -541,7 +541,7 @@ export default function MotionGeneratorPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] bg-transparent text-gray-200 overflow-hidden">
       {/* ── TOP BAR ── */}
-      <div className="shrink-0 flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06] bg-black/30 backdrop-blur-sm">
+      <div className="shrink-0 no-sidebar-swipe flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06] bg-black/30 backdrop-blur-sm">
         <div className="flex items-center gap-2.5">
           <Sparkles className="w-4 h-4 text-teal-400 shrink-0" />
           <span className="text-sm font-semibold text-white">
@@ -961,8 +961,9 @@ export default function MotionGeneratorPage() {
               </div>
 
               {/* Meta row WITH INTERACTIVE CONTROLS */}
-              <div className="flex items-center justify-between px-1 mt-1">
-                <div className="flex items-center gap-2 text-[11px] text-white/50 font-mono">
+              {/* 🌟 FIX: Added flex-wrap, gap-y-2, and w-full so it handles mobile gracefully */}
+              <div className="flex flex-wrap items-center justify-between gap-x-1 gap-y-2 px-1 mt-2 w-full">
+                <div className="flex items-center gap-1.5 sm:gap-2 text-[11px] text-white/50 font-mono shrink-0">
                   {/* Custom Aspect Ratio Selector */}
                   <div
                     className="relative"
@@ -972,22 +973,26 @@ export default function MotionGeneratorPage() {
                       onClick={() =>
                         setOpenMenu(openMenu === "ratio" ? null : "ratio")
                       }
-                      className="flex items-center gap-1.5 bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.1] hover:border-white/[0.2] text-white/80 py-1 px-2.5 rounded-lg transition-all outline-none"
+                      className="flex items-center gap-1 sm:gap-1.5 bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.1] hover:border-white/[0.2] text-white/80 py-1 px-2 sm:px-2.5 rounded-lg transition-all outline-none"
                     >
-                      <span className="text-[11px] font-medium">
-                        {ratio === "16:9"
-                          ? "16:9 Landscape"
-                          : ratio === "9:16"
-                            ? "9:16 Vertical"
-                            : "1:1 Square"}
+                      <span className="text-[11px] font-medium whitespace-nowrap">
+                        {/* 🌟 FIX: Show short name on mobile, long name on desktop */}
+                        <span className="sm:hidden">{ratio}</span>
+                        <span className="hidden sm:inline">
+                          {ratio === "16:9"
+                            ? "16:9 Landscape"
+                            : ratio === "9:16"
+                              ? "9:16 Vertical"
+                              : "1:1 Square"}
+                        </span>
                       </span>
                       <ChevronDown
-                        className={`w-3 h-3 text-white/40 transition-transform duration-200 ${openMenu === "ratio" ? "rotate-180" : ""}`}
+                        className={`w-3 h-3 text-white/40 transition-transform duration-200 shrink-0 ${openMenu === "ratio" ? "rotate-180" : ""}`}
                       />
                     </button>
 
                     {openMenu === "ratio" && (
-                      <div className="absolute bottom-full left-0 mb-1.5 w-36 bg-gray-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 py-1 animate-in fade-in zoom-in-95">
+                      <div className="absolute bottom-full left-0 mb-1.5 w-32 sm:w-36 bg-gray-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 py-1 animate-in fade-in zoom-in-95">
                         {[
                           { v: "16:9", l: "16:9 Landscape" },
                           { v: "9:16", l: "9:16 Vertical" },
@@ -999,7 +1004,7 @@ export default function MotionGeneratorPage() {
                               setRatio(opt.v as any);
                               setOpenMenu(null);
                             }}
-                            className={`w-full text-left px-3 py-1.5 text-[11px] transition-colors ${ratio === opt.v ? "bg-teal-500/20 text-teal-300 font-medium" : "text-white/60 hover:bg-white/10 hover:text-white"}`}
+                            className={`w-full text-left px-3 py-1.5 text-[11px] whitespace-nowrap transition-colors ${ratio === opt.v ? "bg-teal-500/20 text-teal-300 font-medium" : "text-white/60 hover:bg-white/10 hover:text-white"}`}
                           >
                             {opt.l}
                           </button>
@@ -1008,11 +1013,6 @@ export default function MotionGeneratorPage() {
                     )}
                   </div>
 
-                  <span className="opacity-40">·</span>
-                  <span className="font-medium text-white/70">{FPS}fps</span>
-                  <span className="opacity-40">·</span>
-
-                  {/* Custom Duration Selector */}
                   <div
                     className="relative"
                     onClick={(e) => e.stopPropagation()}
@@ -1021,18 +1021,18 @@ export default function MotionGeneratorPage() {
                       onClick={() =>
                         setOpenMenu(openMenu === "duration" ? null : "duration")
                       }
-                      className="flex items-center gap-1.5 bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.1] hover:border-white/[0.2] text-white/80 py-1 px-2.5 rounded-lg transition-all outline-none"
+                      className="flex items-center gap-1 sm:gap-1.5 bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.1] hover:border-white/[0.2] text-white/80 py-1 px-2 sm:px-2.5 rounded-lg transition-all outline-none"
                     >
-                      <span className="text-[11px] font-medium">
+                      <span className="text-[11px] font-medium whitespace-nowrap">
                         {durationSec}s
                       </span>
                       <ChevronDown
-                        className={`w-3 h-3 text-white/40 transition-transform duration-200 ${openMenu === "duration" ? "rotate-180" : ""}`}
+                        className={`w-3 h-3 text-white/40 transition-transform duration-200 shrink-0 ${openMenu === "duration" ? "rotate-180" : ""}`}
                       />
                     </button>
 
                     {openMenu === "duration" && (
-                      <div className="absolute bottom-full left-0 mb-1.5 w-20 bg-gray-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 py-1 animate-in fade-in zoom-in-95">
+                      <div className="absolute bottom-full left-0 mb-1.5 w-16 sm:w-20 bg-gray-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 py-1 animate-in fade-in zoom-in-95">
                         {[3, 5, 10].map((opt) => (
                           <button
                             key={opt}
@@ -1050,21 +1050,22 @@ export default function MotionGeneratorPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1">
+                {/* 🌟 FIX: Added ml-auto so buttons push right, whitespace-nowrap for text */}
+                <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 ml-auto">
                   <button
                     onClick={() => playerRef.current?.seekTo(0)}
-                    className="text-[10px] text-white/25 hover:text-white/50 transition-colors px-2 py-1 rounded hover:bg-white/5"
+                    className="text-[10px] text-white/25 hover:text-white/50 transition-colors px-2 py-1 rounded hover:bg-white/5 whitespace-nowrap"
                   >
                     Restart
                   </button>
                   <button
                     onClick={copyCode}
-                    className="flex items-center gap-1 text-[10px] text-white/25 hover:text-white/50 transition-colors px-2 py-1 rounded hover:bg-white/5"
+                    className="flex items-center gap-1 text-[10px] text-white/25 hover:text-white/50 transition-colors px-2 py-1 rounded hover:bg-white/5 whitespace-nowrap"
                   >
                     {copied ? (
-                      <Check className="w-2.5 h-2.5 text-teal-400" />
+                      <Check className="w-2.5 h-2.5 text-teal-400 shrink-0" />
                     ) : (
-                      <Copy className="w-2.5 h-2.5" />
+                      <Copy className="w-2.5 h-2.5 shrink-0" />
                     )}
                     Copy
                   </button>
@@ -1074,17 +1075,17 @@ export default function MotionGeneratorPage() {
                     onClick={handleExport}
                     disabled={exporting}
                     title="Export animation as WebM video"
-                    className="flex items-center gap-1 text-[10px] font-medium text-teal-400/70 hover:text-teal-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors px-2 py-1 rounded hover:bg-teal-500/10 border border-transparent hover:border-teal-500/20"
+                    className="flex items-center gap-1.5 text-[10px] font-medium text-teal-400/70 hover:text-teal-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors px-2.5 py-1 rounded hover:bg-teal-500/10 border border-transparent hover:border-teal-500/20 whitespace-nowrap"
                   >
                     {exporting ? (
                       <>
-                        <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                        {exportProgress}%
+                        <Loader2 className="w-2.5 h-2.5 animate-spin shrink-0" />
+                        <span>{exportProgress}%</span>
                       </>
                     ) : (
                       <>
-                        <Download className="w-2.5 h-2.5" />
-                        Export
+                        <Download className="w-2.5 h-2.5 shrink-0" />
+                        <span>Export</span>
                       </>
                     )}
                   </button>
