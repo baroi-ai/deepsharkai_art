@@ -7,8 +7,7 @@ import { eq } from "drizzle-orm";
 
 const polar = new Polar({
   accessToken: process.env.POLAR_ACCESS_TOKEN || "",
-  //server: process.env.NODE_ENV === "production" ? "production" : "sandbox",
-  server: "sandbox",
+  server: process.env.NODE_ENV === "production" ? "production" : "sandbox",
 });
 
 export async function POST(req: Request) {
