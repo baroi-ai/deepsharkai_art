@@ -57,10 +57,10 @@ const staticTools = [
   },
   {
     id: 6,
-    name: "AI Voice Generator",
-    description: "Generate studio-quality, private speech locally from text.",
-    imageUrl: "/tools/ai-voice.webm",
-    link: "/dashboard/audio/voice",
+    name: "Transcriber",
+    description: "Transcribe Any audio or video file",
+    imageUrl: "/tools/transcriber.webm",
+    link: "/dashboard/text/transcribe",
     badge: "Free",
   },
   {

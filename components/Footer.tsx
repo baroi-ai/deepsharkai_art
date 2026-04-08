@@ -32,12 +32,15 @@ const Footer = () => {
     { name: "Privacy Policy", to: "/privacy" },
   ];
 
+  // Update this whenever you push a new major update!
+  const appVersion = "6.2.0";
+
   return (
     <footer className="relative border-t border-white/10 pt-12 pb-8 overflow-hidden bg-slate-950">
       <div className="container mx-auto px-4 md:px-6">
         <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-8">
           <div className="text-center md:text-left">
-            <h3 className="text-2xl font-bold mb-2 text-teal-400 drop-shadow-[0_0_8px_rgba(20,184,166,0.5)]">
+            <h3 className="text-2xl font-bold mb-2 text-teal-400 drop-shadow-[0_0_8px_rgba(20,184,166,0.5)] flex items-center justify-center md:justify-start gap-3">
               DeepShark AI
             </h3>
             <div className="flex justify-center md:justify-start space-x-4">
@@ -57,10 +60,17 @@ const Footer = () => {
           </div>
         </div>
 
-        <div className="pt-6 border-t border-white/5 flex flex-col md:flex-row justify-between items-center text-center md:text-left">
-          <p className="text-gray-500 text-sm mb-4 md:mb-0">
-            © {new Date().getFullYear()} DeepShark AI. All rights reserved.
-          </p>
+        <div className="pt-6 border-t border-white/5 flex flex-col md:flex-row justify-between items-center text-center md:text-left gap-4">
+          <div className="text-gray-500 text-sm flex flex-col md:flex-row items-center gap-2 md:gap-3">
+            <span>
+              © {new Date().getFullYear()} DeepShark AI. All rights reserved.
+            </span>
+            {/* Version Badge */}
+            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-xs font-mono text-gray-400">
+              v{appVersion}
+            </span>
+          </div>
+
           <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 md:gap-x-6 text-sm text-gray-500">
             {navLinks.map((link) => (
               <Link

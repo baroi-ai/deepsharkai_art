@@ -91,7 +91,7 @@
   },
   {
     "id": 11,
-    "name": "Transcribe ",
+    "name": "Transcriber",
     "description": "Transcribe Any audio or video file",
     "image_url": "/tools/transciber.webm",
     "link": "/dashboard/text/transcribe",
@@ -118,15 +118,6 @@
   },
   {
     "id": 14,
-    "name": "AI Voice Generator",
-    "description": "Generate studio-quality, private speech locally from text.",
-    "image_url": "/tools/ai-voice.webm",
-    "link": "/dashboard/audio/voice",
-    "badge": "Free",
-    "category": "audio"
-  },
-  {
-    "id": 15,
     "name": "Auto Zoom",
     "description": "Automatically add dynamic zoom cuts and camera movements",
     "image_url": "/tools/Auto-zoom.webm",
@@ -135,7 +126,7 @@
     "category": "Video"
   },
   {
-    "id": 16,
+    "id": 15,
     "name": "Remove Silence",
     "description": "Automatically detect and cut silent pauses from your videos.",
     "image_url": "/tools/ai-voice.webm",
@@ -144,7 +135,7 @@
     "category": "Video"
   },
   {
-    "id": 17,
+    "id": 16,
     "name": "Video Eraser",
     "description": "Remove Watermarks, logos, text, and unwanted objects from videos.",
     "image_url": "/tools/video-eraser.webm",
@@ -153,7 +144,7 @@
     "category": "Video"
   },
   {
-    "id": 18,
+    "id": 17,
     "name": "Motion Generator",
     "description": "Render beautiful 3D motion graphics instantly from text using AI.",
     "image_url": "/tools/motions-tool.webm",
