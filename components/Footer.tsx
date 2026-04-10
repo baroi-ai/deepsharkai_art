@@ -33,7 +33,7 @@ const Footer = () => {
   ];
 
   // Update this whenever you push a new major update!
-  const appVersion = "6.2.0";
+  const appVersion = "6.2.1";
 
   return (
     <footer className="relative border-t border-white/10 pt-12 pb-8 overflow-hidden bg-slate-950">

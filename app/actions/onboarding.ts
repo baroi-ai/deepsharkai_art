@@ -4,11 +4,15 @@ import { auth } from "@/auth";
 import { db } from "../db";
 import { users } from "../db/schema";
 import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache"; // 🌟 ADD THIS IMPORT
+import { revalidatePath } from "next/cache";
 
 export async function completeOnboarding(formData: FormData) {
   const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
+
+  // 🌟 FIX: Gracefully return if not logged in, instead of throwing a hard error
+  if (!session?.user?.id) {
+    return { success: false, error: "You must be logged in to onboard." };
+  }
 
   const useCase = formData.get("useCase") as string;
   const tool = formData.get("tool") as string;
@@ -20,7 +24,7 @@ export async function completeOnboarding(formData: FormData) {
     .set({ isOnboarded: true })
     .where(eq(users.id, session.user.id));
 
-  // 🌟 2. NUKE THE CACHE! This tells Next.js the user is officially onboarded.
+  // 2. NUKE THE CACHE!
   revalidatePath("/", "layout");
 
   // 3. Return success to the client

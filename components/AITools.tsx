@@ -59,7 +59,7 @@ const staticTools = [
     id: 6,
     name: "Transcriber",
     description: "Transcribe Any audio or video file",
-    imageUrl: "/tools/transcriber.webm",
+    imageUrl: "/tools/transciber.webm",
     link: "/dashboard/text/transcribe",
     badge: "Free",
   },

@@ -12,23 +12,21 @@ export default async function DashboardTemplate({
 }) {
   const session = await auth();
 
-  // 1. Not logged in at all? Kick to home.
-  if (!session?.user?.id) {
-    redirect("/");
+  // 🌟 FIX: We ONLY check the database if a session actually exists.
+  // Guests (unlogged-in users) will completely skip this block!
+  if (session?.user?.id) {
+    const [currentUser] = await db
+      .select({ isOnboarded: users.isOnboarded })
+      .from(users)
+      .where(eq(users.id, session.user.id))
+      .limit(1);
+
+    // If they are logged in but haven't onboarded, redirect them
+    if (currentUser && currentUser.isOnboarded === false) {
+      redirect("/onboarding");
+    }
   }
 
-  // 2. Fetch their onboarding status securely on the server
-  const [currentUser] = await db
-    .select({ isOnboarded: users.isOnboarded })
-    .from(users)
-    .where(eq(users.id, session.user.id))
-    .limit(1);
-
-  // 3. If they exist but haven't onboarded, trap them in the flow!
-  if (currentUser && currentUser.isOnboarded === false) {
-    redirect("/onboarding");
-  }
-
-  // 4. Everything is good, render the page content
+  // 🌟 Guests AND fully onboarded users will both reach this point safely!
   return <>{children}</>;
 }
