@@ -182,10 +182,11 @@ export default function UpscalerInteractiveHero() {
       </div>
 
       {/* Call to Action */}
-      <div className="text-center mt-10">
+      {/* Call to Action */}
+      <div className="text-center mt-12 z-30">
         <Link href="/dashboard/image/upscaler">
-          <Button className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-black px-8">
-            Try Upscaler <ArrowRight className="ml-2 h-4 w-4" />
+          <Button className="h-12 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-black px-8 rounded-full shadow-[0_0_20px_rgba(20,184,166,0.3)] transition-all hover:scale-105 font-bold text-base">
+            Try Upscaler <ArrowRight className="ml-2 h-5 w-5" />
           </Button>
         </Link>
       </div>
