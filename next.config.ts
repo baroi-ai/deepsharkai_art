@@ -2,6 +2,12 @@ import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    serverActions: {
+      allowedOrigins: ["deepsharkai.art", "www.deepsharkai.art"],
+    },
+  },
+
   // 🌟 Keeps backend AI logic from trying to bundle into the frontend
   serverExternalPackages: ["onnxruntime-node", "kokoro-js"],
 
