@@ -95,7 +95,6 @@ export default function OnboardingClient({ userName }: { userName: string }) {
           {step === 3 && "Set Your Objective"}
         </h1>
         <p className="text-gray-400 text-center mb-8 text-sm md:text-base">
-          {/* 🌟 FIX: Use the userName prop passed from the server here! */}
           {step === 1 && `Hey ${userName}, let's customize your workspace.`}
           {step === 2 && "What platforms are you already comfortable with?"}
           {step === 3 && "Almost done. How will you use DeepShark today?"}
@@ -103,7 +102,10 @@ export default function OnboardingClient({ userName }: { userName: string }) {
 
         {/* --- STEP 1: Use Case --- */}
         {step === 1 && (
-          <div className="space-y-4 flex-grow animate-in slide-in-from-right-4 fade-in duration-300">
+          <div
+            key="step-1" /* 🦈 FIX: Added Key */
+            className="space-y-4 flex-grow animate-in slide-in-from-right-4 fade-in duration-300"
+          >
             <div className="grid grid-cols-2 gap-3">
               {[
                 { value: "marketing", label: "Marketing", icon: Rocket },
@@ -130,7 +132,10 @@ export default function OnboardingClient({ userName }: { userName: string }) {
 
         {/* --- STEP 2: Tools --- */}
         {step === 2 && (
-          <div className="space-y-4 flex-grow animate-in slide-in-from-right-4 fade-in duration-300">
+          <div
+            key="step-2" /* 🦈 FIX: Added Key */
+            className="space-y-4 flex-grow animate-in slide-in-from-right-4 fade-in duration-300"
+          >
             <div className="grid grid-cols-2 gap-3">
               {[
                 { value: "image-gen", label: "Image Generation" },
@@ -158,7 +163,10 @@ export default function OnboardingClient({ userName }: { userName: string }) {
 
         {/* --- STEP 3: Goal --- */}
         {step === 3 && (
-          <div className="space-y-4 flex-grow animate-in slide-in-from-right-4 fade-in duration-300">
+          <div
+            key="step-3" /* 🦈 FIX: Added Key */
+            className="space-y-4 flex-grow animate-in slide-in-from-right-4 fade-in duration-300"
+          >
             <div className="grid grid-cols-1 gap-3">
               {[
                 {
