@@ -65,10 +65,25 @@ const Footer = () => {
             <span>
               © {new Date().getFullYear()} DeepShark AI. All rights reserved.
             </span>
+
             {/* Version Badge */}
             <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-xs font-mono text-gray-400">
               v{appVersion}
             </span>
+
+            {/* 🦈 NEW: Animated Status Page Link */}
+            <a
+              href="https://status.deepsharkai.art/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-xs font-medium text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              Systems Operational
+            </a>
           </div>
 
           <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 md:gap-x-6 text-sm text-gray-500">
