@@ -41,6 +41,8 @@ Sentry.init({
     "ResizeObserver loop completed with undelivered notifications.",
     "NotAllowedError",
     "The play() request was interrupted",
+    "Failed to read the 'localStorage' property from 'Window'",
+    "Access is denied for this document.",
   ],
 
   // 🛡️ SHARK FIREWALL 5: Block all Chrome, Firefox, and Safari extensions
