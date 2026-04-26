@@ -162,12 +162,14 @@ export default function VideoCaptionerPage() {
     if (!videoRef.current || !transcript || !transcript.chunks) return;
 
     setIsExporting(true);
-    toast.info("Rendering HD Video...", {
-      description: "Applying crisp text rendering and high-bitrate encoding...",
+    const isMobile = window.innerWidth <= 768;
+    toast.info("Rendering Video...", {
+      description: isMobile
+        ? "Mobile-optimised export (30fps)..."
+        : "Applying crisp text rendering...",
     });
 
     const video = videoRef.current;
-
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -177,20 +179,23 @@ export default function VideoCaptionerPage() {
       setIsExporting(false);
       return;
     }
-
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
 
-    const canvasStream = canvas.captureStream(60);
-    let mediaStream;
+    // Mobile: 30 fps / 5 Mbps  |  Desktop: 60 fps / 15 Mbps
+    const exportFps = isMobile ? 30 : 60;
+    const exportBitrate = isMobile ? 5_000_000 : 15_000_000;
+    const frameInterval = 1000 / exportFps; // ms between frames
+
+    const canvasStream = canvas.captureStream(exportFps);
+    let mediaStream: MediaStream | undefined;
     try {
       mediaStream = (video as any).captureStream
         ? (video as any).captureStream()
-        : (video as any).mozCaptureStream();
+        : (video as any).mozCaptureStream?.();
     } catch (e) {
       console.warn("Audio capture fallback triggered.");
     }
-
     if (mediaStream) {
       const audioTracks = mediaStream.getAudioTracks();
       if (audioTracks.length > 0) canvasStream.addTrack(audioTracks[0]);
@@ -200,15 +205,14 @@ export default function VideoCaptionerPage() {
     if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = "video/webm";
 
     const recorder = new MediaRecorder(canvasStream, {
-      mimeType: mimeType,
-      videoBitsPerSecond: 15000000,
+      mimeType,
+      videoBitsPerSecond: exportBitrate,
     });
 
     const recordedChunks: Blob[] = [];
     recorder.ondataavailable = (e) => {
       if (e.data.size > 0) recordedChunks.push(e.data);
     };
-
     recorder.onstop = () => {
       const blob = new Blob(recordedChunks, { type: mimeType.split(";")[0] });
       const url = URL.createObjectURL(blob);
@@ -217,10 +221,9 @@ export default function VideoCaptionerPage() {
       a.download = "viral-captioned-video.webm";
       a.click();
       URL.revokeObjectURL(url);
-
       setIsExporting(false);
       video.pause();
-      toast.success("Export Complete! HD Video downloaded.");
+      toast.success("Export Complete! Video downloaded.");
     };
 
     video.currentTime = 0;
@@ -231,28 +234,43 @@ export default function VideoCaptionerPage() {
     const exportScale = canvas.width / (domRect.width || 340);
 
     const easeOutBack = (t: number) => {
-      const c1 = 1.70158;
-      const c3 = c1 + 1;
+      const c1 = 1.70158,
+        c3 = c1 + 1;
       return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
     };
     const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 
     let isExportActive = true;
+    let lastFrameTime = performance.now();
 
-    const drawLoop = (now: number, metadata: any) => {
-      if (!isExportActive || video.paused || video.ended) return;
+    const drawLoop = () => {
+      if (!isExportActive) return;
+
+      // Stop when video ends
+      if (video.ended || video.paused) {
+        isExportActive = false;
+        recorder.stop();
+        return;
+      }
+
+      const now = performance.now();
+      // Throttle to exportFps — skip rAF ticks that come in too fast
+      if (now - lastFrameTime < frameInterval) {
+        requestAnimationFrame(drawLoop);
+        return;
+      }
+      lastFrameTime = now;
 
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      const t = metadata ? metadata.mediaTime : video.currentTime;
+      const t = video.currentTime;
 
       const chunkIdx = transcript.chunks!.findIndex((c: TranscriptChunk) => {
+        // Use per-chunk sync override if present, else global sync state
         const syncOffset = c.style?.sync !== undefined ? c.style.sync : sync;
         const adjustedT = t + syncOffset;
-
         const start = c.timestamp[0];
         const end = c.timestamp[1] !== null ? c.timestamp[1] : start + 2;
-
         return adjustedT >= start && adjustedT < end;
       });
 
@@ -268,7 +286,6 @@ export default function VideoCaptionerPage() {
           const lSize = chunk.style?.size ?? size;
           const lMainColor = chunk.style?.mainColor ?? mainColor;
           const lHeroColor = chunk.style?.heroColor ?? heroColor;
-          // Glow color is automatically derived from the hero/main text color
           const lGlow = chunk.style?.glow ?? glow;
           const lPosX = chunk.style?.posX ?? posX;
           const lPosY = chunk.style?.posY ?? posY;
@@ -276,7 +293,6 @@ export default function VideoCaptionerPage() {
           const syncOffset = chunk.style?.sync ?? sync;
           const lAnimation = chunk.style?.animation ?? animation;
           const lFontStyle = chunk.style?.fontStyle ?? fontStyle;
-
           const lStrokeEnabled = chunk.style?.strokeEnabled ?? strokeEnabled;
           const lStrokeColor = chunk.style?.strokeColor ?? strokeColor;
           const lStrokeWidth = chunk.style?.strokeWidth ?? strokeWidth;
@@ -320,7 +336,6 @@ export default function VideoCaptionerPage() {
 
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
-
           ctx.save();
           ctx.translate(cx, cy);
           ctx.rotate((lRotation * Math.PI) / 180);
@@ -370,7 +385,6 @@ export default function VideoCaptionerPage() {
             ctx.translate(offsetX, offsetY + anim.yOffset);
             ctx.scale(anim.scale * sizeScale, anim.scale * sizeScale);
             ctx.globalAlpha = anim.opacity;
-
             const fontStylePrefix = isItalic ? "italic " : "";
             const fontWeight = isHero
               ? "900"
@@ -378,26 +392,20 @@ export default function VideoCaptionerPage() {
                 ? "500"
                 : "700";
             ctx.font = `${fontStylePrefix}${fontWeight} ${baseFontSize}px ${fontFace}`;
-
             ctx.lineJoin = "round";
             ctx.miterLimit = 2;
-
             if (lStrokeEnabled) {
               ctx.lineWidth = baseFontSize * (lStrokeWidth / 100);
               ctx.strokeStyle = lStrokeColor;
               ctx.strokeText(tText, 0, 0);
             }
-
-            // Glow color automatically matches the word's fill color; intensity 0 = no glow
             const wordFillColor = isHero ? lHeroColor : lMainColor;
             ctx.shadowColor = lGlow > 0 ? wordFillColor : "transparent";
             ctx.shadowBlur = lGlow * exportScale;
             ctx.shadowOffsetX = 0;
             ctx.shadowOffsetY = 0;
-
             ctx.fillStyle = wordFillColor;
             ctx.fillText(tText, 0, 0);
-
             ctx.restore();
           };
 
@@ -417,9 +425,9 @@ export default function VideoCaptionerPage() {
           if (wIndex >= words.length) wIndex = words.length - 1;
 
           if (lLayout === "hormozi") {
-            let topWords: string[] = [];
-            let midWord = "";
-            let botWords: string[] = [];
+            let topWords: string[] = [],
+              midWord = "",
+              botWords: string[] = [];
             if (words.length === 1) {
               midWord = words[0];
             } else if (words.length === 2) {
@@ -438,11 +446,11 @@ export default function VideoCaptionerPage() {
               botWords = [words[3], words[4]];
             }
 
-            const topScale = 0.45;
-            const midScale = 1.8;
-            const botScale = 0.45;
-            const gap = baseFontSize * 0.15;
-            const ySpacing = baseFontSize * 0.9;
+            const topScale = 0.45,
+              midScale = 1.8,
+              botScale = 0.45;
+            const gap = baseFontSize * 0.15,
+              ySpacing = baseFontSize * 0.9;
 
             const getTierWidth = (arr: string[], sc: number, hero: boolean) => {
               if (!arr.length) return 0;
@@ -460,7 +468,6 @@ export default function VideoCaptionerPage() {
             const topW = getTierWidth(topWords, topScale, false);
             const midW = getTierWidth(midWord ? [midWord] : [], midScale, true);
             const botW = getTierWidth(botWords, botScale, false);
-
             const blockW = Math.max(topW, midW, botW);
             const blockLeft = -blockW / 2;
             const blockRight = blockW / 2;
@@ -513,15 +520,14 @@ export default function VideoCaptionerPage() {
               width: number;
               origIndex: number;
             }[][] = [];
-            let currentLine: any[] = [];
-            let currentLineWidth = 0;
+            let currentLine: any[] = [],
+              currentLineWidth = 0;
 
             words.forEach((w, i) => {
               const isHero = lLayout === "one-word" ? true : i === wIndex;
               const sc = lLayout === "one-word" ? 1.4 : isHero ? 1.1 : 1.0;
               const fw = isUppercase ? w.toUpperCase() : w;
               const wWidth = measureTxt(fw, isHero) * sc;
-
               if (
                 currentLineWidth + wWidth > maxContainerWidth &&
                 currentLine.length > 0
@@ -549,7 +555,6 @@ export default function VideoCaptionerPage() {
                 line.reduce((sum, wordObj) => sum + wordObj.width, 0) +
                 spaceWidth * (line.length - 1);
               let currentX = -totalLineWidth / 2;
-
               line.forEach((wordObj) => {
                 if (wIndex >= wordObj.origIndex) {
                   const timeSinceSpoken =
@@ -571,23 +576,19 @@ export default function VideoCaptionerPage() {
         }
       }
 
-      if ("requestVideoFrameCallback" in video) {
-        (video as any).requestVideoFrameCallback(drawLoop);
-      } else {
-        requestAnimationFrame(() => drawLoop(0, null));
+      requestAnimationFrame(drawLoop);
+    };
+
+    // Use video.onended to cleanly stop — don't rely on RVFC which stalls on mobile
+    video.onended = () => {
+      if (isExportActive) {
+        isExportActive = false;
+        // Give recorder one last frame then stop
+        setTimeout(() => recorder.stop(), 200);
       }
     };
 
-    if ("requestVideoFrameCallback" in video) {
-      (video as any).requestVideoFrameCallback(drawLoop);
-    } else {
-      requestAnimationFrame(() => drawLoop(0, null));
-    }
-
-    video.onended = () => {
-      isExportActive = false;
-      recorder.stop();
-    };
+    requestAnimationFrame(drawLoop);
   };
 
   const formatTranscriptByLayout = (
