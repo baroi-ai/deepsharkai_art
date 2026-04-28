@@ -63,7 +63,16 @@ const Footer = () => {
         <div className="pt-6 border-t border-white/5 flex flex-col md:flex-row justify-between items-center text-center md:text-left gap-4">
           <div className="text-gray-500 text-sm flex flex-col md:flex-row items-center gap-2 md:gap-3">
             <span>
-              © {new Date().getFullYear()} DeepShark AI. All rights reserved.
+              © {new Date().getFullYear()}{" "}
+              <a
+                href="https://baroi-ai.github.io/baroi-ai/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:underline"
+              >
+                Baroi AI
+              </a>
+              . All rights reserved.
             </span>
 
             {/* Version Badge */}
