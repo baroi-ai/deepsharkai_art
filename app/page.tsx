@@ -5,21 +5,21 @@ import LandingPage from "@/components/landing-page";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "DeepShark AI | Extract Layer, Motion & Upscale Images",
+  title: "DeepShark AI | Relight, Layer & Upscale Images",
   description:
-    "The ultimate AI Creative Studio. Extract image layers, edit, motion, Free caption and upscale to 4K using elite AI models. Turn flat images into editable 3D layers instantly.",
+    "The ultimate AI Creative Studio. Relight photos with cinematic AI, extract image layers, generate motion, and upscale to 4K. Turn flat images into editable 3D layers instantly.",
   keywords: [
+    "AI Image Relight",
+    "Cinematic AI Lighting",
     "Image Decomposer",
-    "Free motion generator",
-    "remotion",
-    "free caption generator",
-    "AI Image Upscaler",
     "Extract Image Layers",
     "Split Image into Layers",
+    "Free motion generator",
+    "AI Image Upscaler",
+    "Upscale Image 4K",
+    "free caption generator",
     "AI Background Remover",
     "Magic Eraser",
-    "AI Image Generator",
-    "Upscale Image 4K",
     "AI Photo Editor",
     "DeepShark AI",
   ],
@@ -32,9 +32,9 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: "https://deepsharkai.art/",
     siteName: "DeepShark AI",
-    title: "DeepShark AI • Layer, Motion & Upscale",
+    title: "DeepShark AI • Relight, Layer & Upscale",
     description:
-      "Extract image layers, edit, motion and upscale 4K using elite AI models. The ultimate AI studio for creators.",
+      "Relight photos, extract image layers, and upscale to 4K using elite AI models. The ultimate all-in-one AI studio for creators.",
     images: [
       {
         url: "https://deepsharkai.art/og-image.png",
@@ -46,9 +46,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "DeepShark AI • Layer, Motion & Upscale",
+    title: "DeepShark AI • Relight, Layer & Upscale",
     description:
-      "Extract image layers, edit, motion and upscale 4K using elite AI models. Turn flat images into layers instantly.",
+      "Relight photos with cinematic AI, extract image layers, and upscale to 4K. Turn flat images into professional assets instantly.",
     images: ["https://deepsharkai.art/og-image.png"],
   },
 };

@@ -151,5 +151,14 @@
     "link": "/dashboard/video/motions",
     "badge": "Free",
     "category": "Video"
+  },
+  {
+    "id": 18,
+    "name": "Image Relight",
+    "description": "Relight any image with different lighting conditions.",
+    "image_url": "/tools/relight-tools.webm",
+    "link": "/dashboard/image/relight",
+    "badge": "hot",
+    "category": "Image"
   }
 ]

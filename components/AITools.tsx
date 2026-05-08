@@ -74,11 +74,12 @@ const staticTools = [
   },
   {
     id: 8,
-    name: "AI Image Generator",
-    description: "Generate Image using multiple Ai models",
-    imageUrl: "/tools/ai-image-generator.webm",
-    link: "/dashboard/image/generator",
+    name: "Image Relight",
+    description: "Relight any image with different lighting conditions.",
+    image_url: "/tools/relight-tools.webm",
+    link: "/dashboard/image/relight",
     badge: "hot",
+    category: "Image"
   },
   {
     id: 9,

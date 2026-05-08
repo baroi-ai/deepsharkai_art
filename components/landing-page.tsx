@@ -26,7 +26,7 @@ import UpscalerScrollHero from "./Upscaler";
 import SkinEnhancerInteractiveHero from "./SkinEnhancer";
 import BgRemoverInteractiveHero from "./BgRemoverInteractiveHero";
 import CaptionGeneratorInteractiveHero from "./CaptionGeneratorInteractiveHero";
-import MotionGeneratorHero from "./MotionGeneratorHero";
+import RelightGeneratorHero from "./RelightGeneratorHero";
 
 const LandingPage = () => {
   return (
@@ -39,9 +39,9 @@ const LandingPage = () => {
 
       <AITools />
 
-      <LayerExplosionHero />
+      <RelightGeneratorHero />
 
-      <MotionGeneratorHero />
+      <LayerExplosionHero />
 
       <CaptionGeneratorInteractiveHero />
 

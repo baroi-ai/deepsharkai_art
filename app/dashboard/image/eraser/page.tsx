@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     url: "/dashboard/image/magic-eraser",
     images: [
       {
-        url: "/og-magic-eraser.png", // Ensure this image exists or use a generic one
+        url: "/og-image.png", // Ensure this image exists or use a generic one
         width: 1200,
         height: 630,
         alt: "DeepShark AI Magic Eraser Preview",

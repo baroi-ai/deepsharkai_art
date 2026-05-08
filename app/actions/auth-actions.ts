@@ -70,7 +70,7 @@ export async function registerAction(formData: FormData) {
       email,
       password: hashedPassword,
       name: email.split("@")[0],
-      credits: 5,
+      credits: 0,
     });
 
     const verificationToken = await generateVerificationToken(email);

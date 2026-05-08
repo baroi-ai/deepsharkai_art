@@ -30,7 +30,7 @@ export default function CaptionGeneratorHero() {
         <h2 className="text-3xl md:text-5xl font-bold mb-4 text-white leading-tight">
           Free{" "}
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-cyan-400">
-            AI Captioner.
+            AI Captioner
           </span>
         </h2>
         <p className="text-gray-400 text-lg mb-6">
